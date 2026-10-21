@@ -1,0 +1,428 @@
+openapi: 3.1.0
+info:
+  title: 相寻 AI-03 相似人员照片推荐 API
+  version: 0.1.0
+  description: >
+    面向授权私人相册的视觉相似检索。所有检索必须先通过相册授权、
+    检索申请、用途和有效期检查。系统不输出真实身份或联系方式。
+servers:
+  - url: https://api.example.invalid/v1
+    description: 课程演示环境占位地址
+tags:
+  - name: Albums
+  - name: Search requests
+  - name: Search
+  - name: Feedback
+  - name: Consent
+  - name: Audit
+  - name: Evaluation
+paths:
+  /albums:
+    get:
+      tags: [Albums]
+      summary: 返回当前用户可管理或可申请检索的相册
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 相册列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, requestId]
+                properties:
+                  requestId: { type: string, format: uuid }
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Album"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /search-requests:
+    post:
+      tags: [Search requests]
+      summary: 参与者提交本人照片检索申请
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [albumId, purposeCode, requestedDays]
+              properties:
+                albumId: { type: string, format: uuid }
+                purposeCode:
+                  type: string
+                  enum: [FIND_MY_PHOTOS]
+                requestedDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 14
+                  default: 7
+                statement:
+                  type: string
+                  maxLength: 500
+      responses:
+        "201":
+          description: 申请已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /search-requests/{requestId}:
+    patch:
+      tags: [Search requests]
+      summary: 相册所有者同意或拒绝检索申请
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/RequestId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [APPROVE, REJECT]
+                approvedDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 7
+                reason:
+                  type: string
+                  maxLength: 300
+      responses:
+        "200":
+          description: 决策已记录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: 申请已被处理或授权已失效
+  /search-sessions:
+    post:
+      tags: [Search]
+      summary: 上传临时样本并创建检索会话
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [sample, requestId]
+              properties:
+                sample:
+                  type: string
+                  format: binary
+                requestId:
+                  type: string
+                  format: uuid
+                queryText:
+                  type: string
+                  maxLength: 200
+                sort:
+                  type: string
+                  enum: [OVERALL, FACE, OUTFIT, SCENE]
+                  default: OVERALL
+                diversity:
+                  type: boolean
+                  default: true
+      responses:
+        "202":
+          description: 检索已接受
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchSession"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          description: 图片过大
+        "415":
+          description: 不支持的图片格式
+  /search-sessions/{sessionId}/results:
+    get:
+      tags: [Search]
+      summary: 获取 Top-K 结果、匹配证据和解释
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 12 }
+      responses:
+        "200":
+          description: 授权范围内的检索结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+        "404":
+          description: 会话不存在或已过期
+        "409":
+          description: 授权状态已变化，需要重新申请
+  /feedback:
+    post:
+      tags: [Feedback]
+      summary: 记录对结果的去标识反馈
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resultId, relevance]
+              properties:
+                resultId: { type: string, format: uuid }
+                relevance:
+                  type: string
+                  enum: [RELEVANT, IRRELEVANT, UNDO]
+                reasonCode:
+                  type: string
+                  enum: [WRONG_PERSON, WRONG_SCENE, WRONG_OUTFIT, PRIVACY_CONCERN, OTHER]
+      responses:
+        "201":
+          description: 反馈已记录
+          headers:
+            X-Audit-Event-Id:
+              schema: { type: string, format: uuid }
+  /consents/{consentId}:
+    delete:
+      tags: [Consent]
+      summary: 撤回授权并创建派生数据清理任务
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: consentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "202":
+          description: 已停止授权并进入清理
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [consentId, status, cleanupJobId, requestId]
+                properties:
+                  consentId: { type: string, format: uuid }
+                  status:
+                    type: string
+                    enum: [REVOKED, CLEANUP_PENDING]
+                  cleanupJobId: { type: string, format: uuid }
+                  requestId: { type: string, format: uuid }
+        "409":
+          description: 授权已经撤回
+  /audit-events:
+    get:
+      tags: [Audit]
+      summary: 相册所有者查看授权和检索审计
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: albumId
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: 审计事件
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, requestId]
+                properties:
+                  requestId: { type: string, format: uuid }
+                  nextCursor: { type: [string, "null"] }
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AuditEvent"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /experiments/summary:
+    get:
+      tags: [Evaluation]
+      summary: 查看 A/B 策略与聚合指标
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 聚合实验摘要，不含个人照片或特征
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, requestId]
+                properties:
+                  requestId: { type: string, format: uuid }
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExperimentSummary"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Unauthorized:
+      description: 未登录或令牌失效
+    Forbidden:
+      description: 缺少相册、申请或用途授权
+    ValidationError:
+      description: 请求参数不合法
+  schemas:
+    Album:
+      type: object
+      required: [id, name, role, photoCount, indexStatus]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        role:
+          type: string
+          enum: [OWNER, PARTICIPANT]
+        photoCount: { type: integer, minimum: 0 }
+        indexStatus:
+          type: string
+          enum: [PENDING, INDEXING, READY, CLEANUP_PENDING, FAILED]
+        consentExpiresAt: { type: [string, "null"], format: date-time }
+    SearchRequest:
+      type: object
+      required: [id, albumId, requesterId, purposeCode, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        albumId: { type: string, format: uuid }
+        requesterId: { type: string, format: uuid }
+        purposeCode: { type: string, enum: [FIND_MY_PHOTOS] }
+        status:
+          type: string
+          enum: [REQUESTED, APPROVED, REJECTED, EXPIRED, REVOKED]
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+        decidedBy: { type: [string, "null"], format: uuid }
+    SearchSession:
+      type: object
+      required: [id, requestId, status, sampleExpiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        requestId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [QUEUED, EXTRACTING, SEARCHING, COMPLETED, FAILED, EXPIRED]
+        sampleExpiresAt: { type: string, format: date-time }
+        pollAfterMs: { type: integer, minimum: 50 }
+    SearchResults:
+      type: object
+      required: [sessionId, items, modelVersion, policyVersion, requestId]
+      properties:
+        sessionId: { type: string, format: uuid }
+        modelVersion: { type: string }
+        policyVersion: { type: string }
+        requestId: { type: string, format: uuid }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SearchResult"
+    SearchResult:
+      type: object
+      required: [id, photoId, title, score, factors, explanation, albumId]
+      properties:
+        id: { type: string, format: uuid }
+        photoId: { type: string, format: uuid }
+        albumId: { type: string, format: uuid }
+        title: { type: string }
+        score: { type: number, minimum: 0, maximum: 1 }
+        factors:
+          type: object
+          required: [face, outfit, scene]
+          properties:
+            face: { type: number, minimum: 0, maximum: 1 }
+            outfit: { type: number, minimum: 0, maximum: 1 }
+            scene: { type: number, minimum: 0, maximum: 1 }
+        explanation:
+          type: object
+          required: [facts, summary, identityDisclaimer]
+          properties:
+            facts:
+              type: array
+              items: { type: string }
+            summary: { type: string }
+            identityDisclaimer:
+              type: string
+              const: 视觉相似建议，不是身份认定
+        thumbnailUrl:
+          type: string
+          format: uri
+          description: 短时签名 URL，不得作为永久链接
+    AuditEvent:
+      type: object
+      required: [id, action, actorId, occurredAt, policyVersion]
+      properties:
+        id: { type: string, format: uuid }
+        action:
+          type: string
+          enum:
+            - CONSENT_CREATED
+            - CONSENT_REVOKED
+            - REQUEST_SUBMITTED
+            - REQUEST_APPROVED
+            - REQUEST_REJECTED
+            - SEARCH_COMPLETED
+            - FEEDBACK_RECORDED
+            - CLEANUP_COMPLETED
+            - CLEANUP_FAILED
+        actorId: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+        policyVersion: { type: string }
+        metadata:
+          type: object
+          additionalProperties: true
+    ExperimentSummary:
+      type: object
+      required: [key, modelVersion, rolloutPercent, metrics]
+      properties:
+        key: { type: string }
+        modelVersion: { type: string }
+        rolloutPercent: { type: number, minimum: 0, maximum: 100 }
+        metrics:
+          type: object
+          required: [topKRecall, ndcgAt10, p95LatencyMs]
+          properties:
+            topKRecall: { type: number, minimum: 0, maximum: 1 }
+            ndcgAt10: { type: number, minimum: 0, maximum: 1 }
+            p95LatencyMs: { type: number, minimum: 0 }

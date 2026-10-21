@@ -1,0 +1,3363 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>相寻 - AI-03 相似人员照片推荐交互原型</title>
+  <style>
+    :root {
+      --ink: #17342f;
+      --ink-2: #264842;
+      --paper: #f3f0e9;
+      --paper-2: #ebe6dc;
+      --surface: #fffdf8;
+      --surface-strong: #ffffff;
+      --line: #dcd5c8;
+      --line-strong: #c9c0b1;
+      --muted: #756f65;
+      --muted-2: #9a9388;
+      --green: #2f7663;
+      --green-soft: #d9e9e2;
+      --orange: #d87942;
+      --orange-soft: #f6e3d4;
+      --yellow: #b98627;
+      --red: #b94d4d;
+      --red-soft: #f7dede;
+      --shadow: 0 18px 50px rgba(41, 50, 43, 0.10);
+      --shadow-sm: 0 8px 24px rgba(41, 50, 43, 0.08);
+      --radius: 20px;
+      --radius-sm: 14px;
+      --sans: "Avenir Next", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --serif: "Songti SC", "STSong", "Noto Serif CJK SC", Georgia, serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 83% 8%, rgba(216, 121, 66, 0.10), transparent 25rem),
+        var(--paper);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid rgba(216, 121, 66, 0.32);
+      outline-offset: 2px;
+    }
+    a { color: inherit; }
+    img { display: block; max-width: 100%; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .app-shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 24px 18px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 26px;
+      color: #f8f4eb;
+      background:
+        radial-gradient(circle at 30% 0%, rgba(93, 157, 137, 0.34), transparent 18rem),
+        #16362f;
+      overflow: auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 8px;
+    }
+    .brand-mark {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .brand-mark::before,
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      border-radius: 50%;
+    }
+    .brand-mark::before {
+      inset: 9px;
+      border: 1px solid rgba(255, 255, 255, 0.72);
+    }
+    .brand-mark::after {
+      width: 8px;
+      height: 8px;
+      right: 4px;
+      top: 5px;
+      background: var(--orange);
+      box-shadow: 0 0 0 3px rgba(216, 121, 66, 0.20);
+    }
+    .brand-name {
+      font-family: var(--serif);
+      font-size: 21px;
+      letter-spacing: 0.12em;
+      line-height: 1.1;
+    }
+    .brand-sub {
+      margin-top: 3px;
+      color: rgba(255, 255, 255, 0.56);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+    }
+
+    .profile-chip {
+      margin: 0 4px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.055);
+    }
+    .avatar {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #17342f;
+      background: #e8d7bd;
+      font-family: var(--serif);
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .profile-name { font-size: 13px; font-weight: 600; }
+    .profile-meta { color: rgba(255, 255, 255, 0.55); font-size: 11px; }
+
+    .nav-label {
+      padding: 0 12px;
+      margin-bottom: 8px;
+      color: rgba(255, 255, 255, 0.42);
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    .nav-list { display: grid; gap: 5px; }
+    nav { min-width: 0; }
+    .nav-button {
+      width: 100%;
+      min-height: 42px;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border: 0;
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.68);
+      background: transparent;
+      text-align: left;
+      transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+    }
+    .nav-button:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+      transform: translateX(2px);
+    }
+    .nav-button.is-active {
+      color: #17342f;
+      background: #f2e8da;
+      font-weight: 650;
+    }
+    .nav-glyph {
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 7px;
+      font-size: 10px;
+      opacity: 0.9;
+    }
+    .nav-count {
+      margin-left: auto;
+      min-width: 22px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.10);
+      text-align: center;
+      font-size: 10px;
+    }
+    .nav-button.is-active .nav-count { background: rgba(23, 52, 47, 0.10); }
+
+    .sidebar-spacer { flex: 1; }
+    .privacy-card {
+      margin: 0 4px;
+      padding: 15px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 15px;
+      background: rgba(10, 30, 26, 0.28);
+    }
+    .privacy-card-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .privacy-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #86c8a6;
+      box-shadow: 0 0 0 4px rgba(134, 200, 166, 0.13);
+    }
+    .privacy-card p {
+      margin: 9px 0 12px;
+      color: rgba(255, 255, 255, 0.56);
+      font-size: 11px;
+      line-height: 1.65;
+    }
+    .privacy-link {
+      padding: 0;
+      border: 0;
+      color: #f1cba8;
+      background: none;
+      font-size: 11px;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .version {
+      padding: 0 8px;
+      color: rgba(255, 255, 255, 0.30);
+      font-size: 10px;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 0 28px 42px;
+    }
+    .topbar {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid rgba(201, 192, 177, 0.7);
+    }
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .breadcrumb strong { color: var(--ink); font-weight: 650; }
+    .breadcrumb-sep { color: var(--line-strong); }
+    .top-actions { display: flex; align-items: center; gap: 9px; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 11px;
+      border: 1px solid #c8ddd4;
+      border-radius: 999px;
+      color: #245b4e;
+      background: #e9f2ee;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .status-pill::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .icon-button {
+      min-width: 38px;
+      min-height: 38px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--ink);
+      background: rgba(255, 253, 248, 0.74);
+    }
+    .icon-button:hover { background: var(--surface-strong); }
+
+    .page {
+      width: min(1220px, 100%);
+      margin: 0 auto;
+      padding-top: 30px;
+    }
+    .hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .eyebrow {
+      margin-bottom: 9px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--orange);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before {
+      content: "";
+      width: 22px;
+      height: 1px;
+      background: currentColor;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      margin-bottom: 9px;
+      font-family: var(--serif);
+      font-size: clamp(30px, 4vw, 46px);
+      font-weight: 500;
+      letter-spacing: -0.04em;
+      line-height: 1.14;
+    }
+    .hero p {
+      max-width: 640px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .hero-note {
+      max-width: 260px;
+      padding: 12px 14px;
+      border-left: 2px solid var(--orange);
+      color: var(--muted);
+      background: rgba(255, 253, 248, 0.52);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+    .hero-note strong { display: block; color: var(--ink); font-size: 12px; }
+
+    .metric-strip {
+      margin-bottom: 22px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255, 253, 248, 0.62);
+      overflow: hidden;
+    }
+    .metric {
+      min-height: 78px;
+      padding: 14px 18px;
+      border-right: 1px solid var(--line);
+    }
+    .metric:last-child { border-right: 0; }
+    .metric-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.03em;
+    }
+    .metric-value {
+      margin-top: 8px;
+      font-family: var(--serif);
+      font-size: 22px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .metric-value small {
+      margin-left: 3px;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 10px;
+    }
+    .metric-live {
+      color: var(--green);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 290px minmax(0, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .query-panel {
+      position: sticky;
+      top: 18px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+    .panel-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .panel-heading h2 {
+      margin-bottom: 0;
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .tiny-label {
+      color: var(--muted-2);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .portrait-frame {
+      position: relative;
+      height: 232px;
+      overflow: hidden;
+      border-radius: 14px;
+      background:
+        radial-gradient(circle at 74% 20%, #f3cf9f 0 7%, transparent 7.5%),
+        linear-gradient(150deg, #c7d4c2, #e7d4b8 54%, #b9825e);
+    }
+    .portrait-frame::before {
+      content: "";
+      position: absolute;
+      left: 18%;
+      bottom: -18%;
+      width: 70%;
+      height: 66%;
+      border-radius: 48% 48% 0 0;
+      background: #32594e;
+      transform: rotate(-4deg);
+    }
+    .portrait-frame::after {
+      content: "";
+      position: absolute;
+      left: 19%;
+      bottom: 5%;
+      width: 12%;
+      height: 42%;
+      border-radius: 50%;
+      background: rgba(255, 247, 231, 0.56);
+      transform: rotate(22deg);
+    }
+    .portrait-head {
+      position: absolute;
+      z-index: 2;
+      top: 31px;
+      left: 50%;
+      width: 104px;
+      height: 126px;
+      border-radius: 48% 48% 42% 42%;
+      background: #deb78f;
+      transform: translateX(-50%) rotate(-2deg);
+      box-shadow: inset -13px -6px 0 rgba(91, 46, 34, 0.08);
+    }
+    .portrait-hair {
+      position: absolute;
+      z-index: 3;
+      top: 20px;
+      left: 46%;
+      width: 120px;
+      height: 89px;
+      border-radius: 56% 54% 28% 30%;
+      background: #3c2924;
+      transform: translateX(-50%) rotate(-5deg);
+      clip-path: polygon(5% 14%, 24% 0, 71% 0, 98% 21%, 93% 77%, 82% 60%, 77% 95%, 66% 63%, 45% 75%, 30% 52%, 14% 77%);
+    }
+    .portrait-neck {
+      position: absolute;
+      z-index: 1;
+      top: 134px;
+      left: 50%;
+      width: 43px;
+      height: 63px;
+      border-radius: 0 0 18px 18px;
+      background: #d5a77f;
+      transform: translateX(-50%);
+    }
+    .portrait-tag {
+      position: absolute;
+      z-index: 4;
+      top: 12px;
+      left: 12px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #17342f;
+      background: rgba(255, 253, 248, 0.86);
+      font-size: 9px;
+      font-weight: 600;
+      backdrop-filter: blur(8px);
+    }
+    .portrait-caption {
+      position: absolute;
+      z-index: 4;
+      right: 12px;
+      bottom: 12px;
+      left: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: #fff;
+      text-shadow: 0 1px 8px rgba(0, 0, 0, 0.24);
+    }
+    .portrait-caption strong { font-size: 12px; }
+    .portrait-caption span { font-size: 10px; opacity: 0.76; }
+
+    .sample-actions {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 42px;
+      gap: 8px;
+    }
+    .primary-button, .secondary-button, .ghost-button, .text-button {
+      min-height: 40px;
+      border-radius: 11px;
+      transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+    }
+    .primary-button {
+      padding: 0 15px;
+      border: 1px solid var(--ink);
+      color: #fff;
+      background: var(--ink);
+      font-weight: 650;
+    }
+    .primary-button:hover { background: #254b43; transform: translateY(-1px); }
+    .secondary-button {
+      padding: 0 15px;
+      border: 1px solid var(--line-strong);
+      color: var(--ink);
+      background: var(--surface);
+      font-weight: 600;
+    }
+    .secondary-button:hover { border-color: var(--ink); background: #fff; }
+    .ghost-button {
+      padding: 0 13px;
+      border: 1px solid transparent;
+      color: var(--muted);
+      background: transparent;
+    }
+    .ghost-button:hover { background: var(--paper-2); color: var(--ink); }
+    .text-button {
+      min-height: 32px;
+      padding: 0;
+      border: 0;
+      color: var(--green);
+      background: none;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .text-button:hover { text-decoration: underline; text-underline-offset: 3px; }
+    .square-button {
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--ink);
+      background: var(--surface);
+      font-size: 16px;
+    }
+    .square-button:hover { border-color: var(--ink); }
+
+    .query-facts {
+      margin: 16px 0 0;
+      padding: 13px 0 0;
+      display: grid;
+      gap: 8px;
+      border-top: 1px solid var(--line);
+    }
+    .fact-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .fact-row strong { color: var(--ink); font-weight: 600; }
+    .inline-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--green);
+    }
+    .inline-status::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .weight-chips {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .chip {
+      min-height: 27px;
+      padding: 3px 9px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--paper);
+      font-size: 10px;
+      white-space: nowrap;
+    }
+    .chip b { color: var(--ink); font-weight: 650; }
+    .weight-chip .bar {
+      width: 24px;
+      height: 3px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--green) var(--fill), #dfdbd2 var(--fill));
+    }
+
+    .results-panel { min-width: 0; }
+    .results-toolbar {
+      margin-bottom: 14px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+    }
+    .results-title {
+      margin-bottom: 4px;
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .results-sub {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .toolbar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 7px;
+    }
+    .segmented {
+      display: flex;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: rgba(255, 253, 248, 0.74);
+    }
+    .segment {
+      min-height: 31px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 8px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 10px;
+      white-space: nowrap;
+    }
+    .segment:hover { color: var(--ink); }
+    .segment.is-active {
+      color: #fff;
+      background: var(--ink);
+      font-weight: 650;
+    }
+    .switch {
+      min-height: 37px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--muted);
+      background: rgba(255, 253, 248, 0.74);
+      font-size: 10px;
+      white-space: nowrap;
+    }
+    .switch-track {
+      position: relative;
+      width: 27px;
+      height: 15px;
+      border-radius: 999px;
+      background: #cbc5ba;
+      transition: background 150ms ease;
+    }
+    .switch-track::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 150ms ease;
+    }
+    .switch[aria-pressed="true"] .switch-track { background: var(--green); }
+    .switch[aria-pressed="true"] .switch-track::after { transform: translateX(12px); }
+
+    .semantic-bar {
+      margin-bottom: 16px;
+      padding: 8px 9px 8px 13px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+      box-shadow: 0 4px 15px rgba(41, 50, 43, 0.035);
+    }
+    .semantic-mark {
+      width: 22px;
+      height: 22px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      color: var(--orange);
+      background: var(--orange-soft);
+      font-family: var(--serif);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .semantic-input {
+      min-width: 0;
+      flex: 1;
+      padding: 6px 0;
+      border: 0;
+      outline: none;
+      color: var(--ink);
+      background: transparent;
+      font-size: 12px;
+    }
+    .semantic-input::placeholder { color: var(--muted-2); }
+    .semantic-submit {
+      min-height: 33px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 9px;
+      color: #fff;
+      background: var(--orange);
+      font-size: 10px;
+      font-weight: 650;
+    }
+    .semantic-submit:hover { background: #c86835; }
+
+    .query-banner {
+      display: none;
+      margin: -4px 0 14px;
+      padding: 9px 12px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid #e4cdb9;
+      border-radius: 10px;
+      color: #7d4727;
+      background: #fbefe5;
+      font-size: 10px;
+    }
+    .query-banner.is-visible { display: flex; }
+
+    .photo-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .photo-card {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--surface);
+      box-shadow: 0 5px 18px rgba(41, 50, 43, 0.035);
+      transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+      animation: cardIn 300ms ease both;
+    }
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(7px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .photo-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 28px rgba(41, 50, 43, 0.10);
+    }
+    .photo-card.is-dismissed { opacity: 0.56; }
+    .photo-visual {
+      position: relative;
+      height: 205px;
+      overflow: hidden;
+      background: var(--scene-bg);
+    }
+    .photo-visual::before {
+      content: "";
+      position: absolute;
+      inset: auto -12% -18% -12%;
+      height: 53%;
+      background: var(--scene-ground);
+      transform: rotate(var(--ground-rotate, -2deg));
+    }
+    .photo-visual::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(11, 31, 26, 0.05), transparent 26%, transparent 72%, rgba(11, 31, 26, 0.12)),
+        linear-gradient(0deg, rgba(11, 31, 26, 0.22), transparent 44%);
+    }
+    .scene-orb {
+      position: absolute;
+      top: 22px;
+      right: 24px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255, 233, 185, 0.74);
+      filter: blur(1px);
+    }
+    .scene-line {
+      position: absolute;
+      bottom: 27%;
+      left: -5%;
+      width: 62%;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.28);
+      transform: rotate(var(--line-rotate, -8deg));
+      box-shadow: 42px -20px 0 rgba(255, 255, 255, 0.18), 88px 12px 0 rgba(255, 255, 255, 0.12);
+    }
+    .scene-block {
+      position: absolute;
+      right: 9%;
+      bottom: 23%;
+      width: 39%;
+      height: 26%;
+      border-radius: 7px 7px 2px 2px;
+      background: rgba(255, 249, 238, 0.34);
+      transform: rotate(var(--block-rotate, -4deg));
+      box-shadow: -22px -11px 0 rgba(31, 56, 47, 0.14);
+    }
+    .mini-person {
+      position: absolute;
+      z-index: 2;
+      bottom: 9%;
+      left: var(--person-left, 36%);
+      width: 34%;
+      height: 61%;
+      transform: rotate(var(--person-rotate, -1deg));
+    }
+    .mini-person::before {
+      content: "";
+      position: absolute;
+      z-index: 2;
+      top: 0;
+      left: 50%;
+      width: 46px;
+      height: 55px;
+      border-radius: 48% 48% 44% 44%;
+      background: var(--skin, #d7a983);
+      transform: translateX(-50%);
+      box-shadow: inset -8px -5px 0 rgba(77, 36, 26, 0.10);
+    }
+    .mini-person::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      width: 112%;
+      height: 66%;
+      border-radius: 45% 45% 8px 8px;
+      background: var(--outfit, #2c6259);
+      transform: translateX(-50%);
+      box-shadow: inset 16px 0 0 rgba(255, 255, 255, 0.06), inset -20px 0 0 rgba(0, 0, 0, 0.05);
+    }
+    .mini-hair {
+      position: absolute;
+      z-index: 3;
+      top: -5px;
+      left: 50%;
+      width: 56px;
+      height: 40px;
+      border-radius: 56% 54% 34% 30%;
+      background: var(--hair, #382821);
+      transform: translateX(-50%) rotate(-4deg);
+      clip-path: polygon(7% 18%, 27% 0, 79% 0, 98% 28%, 91% 80%, 78% 58%, 62% 84%, 42% 61%, 18% 75%);
+    }
+    .scene-leaf {
+      position: absolute;
+      z-index: 3;
+      top: 27%;
+      left: 7%;
+      width: 27px;
+      height: 48px;
+      border-radius: 80% 8% 80% 8%;
+      background: rgba(23, 76, 59, 0.48);
+      transform: rotate(-22deg);
+      box-shadow: 23px 12px 0 rgba(23, 76, 59, 0.28);
+    }
+    .photo-badge {
+      position: absolute;
+      z-index: 5;
+      top: 10px;
+      left: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: #15342d;
+      background: rgba(255, 253, 248, 0.88);
+      font-size: 9px;
+      font-weight: 650;
+      backdrop-filter: blur(7px);
+    }
+    .score-badge {
+      position: absolute;
+      z-index: 5;
+      top: 10px;
+      right: 10px;
+      width: 45px;
+      height: 45px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      border-radius: 50%;
+      color: #fff;
+      background: rgba(19, 49, 41, 0.65);
+      font-family: var(--serif);
+      font-size: 15px;
+      font-weight: 600;
+      backdrop-filter: blur(7px);
+    }
+    .score-badge small {
+      display: block;
+      margin-top: -4px;
+      font-family: var(--sans);
+      font-size: 7px;
+      font-weight: 400;
+      letter-spacing: 0.08em;
+      text-align: center;
+      opacity: 0.75;
+    }
+    .photo-overlay-actions {
+      position: absolute;
+      z-index: 6;
+      right: 9px;
+      top: 165px;
+      left: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+    .overlay-action {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      border-radius: 9px;
+      color: #fff;
+      background: rgba(20, 48, 41, 0.50);
+      font-size: 11px;
+      backdrop-filter: blur(7px);
+    }
+    .overlay-action:hover { background: rgba(20, 48, 41, 0.78); }
+    .overlay-action.is-saved { color: #f8d6b7; background: rgba(20, 48, 41, 0.84); }
+    .photo-info { padding: 12px 13px 13px; }
+    .photo-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .photo-title {
+      margin-bottom: 2px;
+      overflow: hidden;
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: 15px;
+      font-weight: 600;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .photo-date { color: var(--muted-2); font-size: 9px; }
+    .similarity-label {
+      flex: 0 0 auto;
+      color: var(--green);
+      font-size: 9px;
+      font-weight: 650;
+    }
+    .photo-reason {
+      height: 32px;
+      margin: 9px 0 10px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.6;
+    }
+    .factor-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .factor-mini {
+      flex: 1;
+      min-width: 0;
+      padding-top: 5px;
+      border-top: 2px solid var(--line);
+    }
+    .factor-mini:nth-child(1) { border-color: #74a995; }
+    .factor-mini:nth-child(2) { border-color: #d4a477; }
+    .factor-mini:nth-child(3) { border-color: #a6a2b8; }
+    .factor-mini span {
+      display: flex;
+      justify-content: space-between;
+      gap: 3px;
+      color: var(--muted-2);
+      font-size: 8px;
+    }
+    .factor-mini b { color: var(--ink); font-weight: 600; }
+    .feedback-row {
+      margin-top: 10px;
+      padding-top: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      border-top: 1px solid #eee9df;
+    }
+    .feedback-copy { color: var(--muted-2); font-size: 9px; }
+    .feedback-actions { display: flex; gap: 4px; }
+    .feedback-button {
+      min-height: 26px;
+      padding: 0 7px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 9px;
+    }
+    .feedback-button:hover { color: var(--ink); border-color: var(--ink); }
+    .feedback-button.is-selected {
+      color: #fff;
+      border-color: var(--green);
+      background: var(--green);
+    }
+    .feedback-button[data-feedback="irrelevant"].is-selected {
+      border-color: var(--red);
+      background: var(--red);
+    }
+    .dismiss-note {
+      display: none;
+      margin-top: 8px;
+      padding: 6px 8px;
+      border-radius: 7px;
+      color: #8b4545;
+      background: var(--red-soft);
+      font-size: 9px;
+    }
+    .photo-card.is-dismissed .dismiss-note { display: block; }
+    .empty-state {
+      display: none;
+      min-height: 310px;
+      padding: 44px 20px;
+      place-items: center;
+      border: 1px dashed var(--line-strong);
+      border-radius: 18px;
+      color: var(--muted);
+      background: rgba(255, 253, 248, 0.48);
+      text-align: center;
+    }
+    .empty-state.is-visible { display: grid; }
+    .empty-state strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: 19px;
+    }
+    .grid-footer {
+      grid-column: 1 / -1;
+      padding: 8px 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted-2);
+      font-size: 9px;
+    }
+    .model-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .model-note::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--orange);
+    }
+
+    .page-footer {
+      width: min(1220px, 100%);
+      margin: 34px auto 0;
+      padding: 18px 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      border-top: 1px solid var(--line);
+      color: var(--muted-2);
+      font-size: 9px;
+    }
+    .page-footer strong { color: var(--muted); font-weight: 600; }
+
+    .modal-backdrop {
+      position: fixed;
+      z-index: 100;
+      inset: 0;
+      padding: 24px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15, 36, 31, 0.52);
+      backdrop-filter: blur(8px);
+    }
+    .modal-backdrop.is-open {
+      display: flex;
+      animation: backdropIn 180ms ease;
+    }
+    @keyframes backdropIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal {
+      width: min(520px, 100%);
+      max-height: min(90vh, 820px);
+      overflow: auto;
+      border: 1px solid rgba(255, 255, 255, 0.6);
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: 0 30px 100px rgba(9, 29, 24, 0.30);
+      animation: modalIn 220ms ease both;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.985); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .modal.is-wide { width: min(820px, 100%); }
+    .modal.is-drawer {
+      width: min(460px, 100%);
+      margin-left: auto;
+      max-height: 100%;
+      border-radius: 22px;
+    }
+    .modal-head {
+      position: sticky;
+      z-index: 3;
+      top: 0;
+      padding: 20px 22px 16px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 253, 248, 0.96);
+      backdrop-filter: blur(9px);
+    }
+    .modal-kicker {
+      margin-bottom: 6px;
+      color: var(--orange);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+    .modal-title {
+      margin-bottom: 3px;
+      font-family: var(--serif);
+      font-size: 23px;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+    .modal-subtitle {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .modal-close {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 17px;
+      line-height: 1;
+    }
+    .modal-close:hover { color: var(--ink); border-color: var(--ink); }
+    .modal-body { padding: 20px 22px 22px; }
+    .modal-footer {
+      padding: 15px 22px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      border-top: 1px solid var(--line);
+    }
+    .consent-hero {
+      padding: 4px 0 18px;
+      display: grid;
+      grid-template-columns: 78px minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+    }
+    .consent-seal {
+      position: relative;
+      width: 78px;
+      height: 78px;
+      display: grid;
+      place-items: center;
+      border: 1px solid #b9d2c8;
+      border-radius: 50%;
+      color: var(--green);
+      background: #e8f1ed;
+      font-family: var(--serif);
+      font-size: 21px;
+      font-weight: 700;
+    }
+    .consent-seal::after {
+      content: "";
+      position: absolute;
+      inset: 7px;
+      border: 1px dashed #9bbdaf;
+      border-radius: 50%;
+    }
+    .consent-lead {
+      margin-bottom: 5px;
+      font-family: var(--serif);
+      font-size: 17px;
+      font-weight: 600;
+    }
+    .consent-copy { margin-bottom: 0; color: var(--muted); font-size: 11px; line-height: 1.72; }
+    .consent-points {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin: 0 0 18px;
+    }
+    .consent-point {
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #faf7f1;
+    }
+    .consent-point b {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--ink);
+      font-size: 11px;
+    }
+    .consent-point span { color: var(--muted); font-size: 9px; line-height: 1.55; }
+    .consent-check {
+      padding: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      border: 1px solid #b9d2c8;
+      border-radius: 11px;
+      background: #eef5f2;
+      color: var(--ink);
+      font-size: 10px;
+      line-height: 1.6;
+    }
+    .consent-check input { margin-top: 2px; accent-color: var(--green); }
+    .button-block { width: 100%; }
+    .modal-copy {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.75;
+    }
+    .notice {
+      padding: 12px 14px;
+      border-radius: 10px;
+      color: #725338;
+      background: #f9ece0;
+      font-size: 10px;
+      line-height: 1.7;
+    }
+    .notice strong { color: #5c3a22; }
+
+    .upload-zone {
+      position: relative;
+      min-height: 190px;
+      padding: 28px 20px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--line-strong);
+      border-radius: 16px;
+      color: var(--muted);
+      background:
+        linear-gradient(135deg, rgba(243, 240, 233, 0.65), rgba(255, 253, 248, 0.9));
+      text-align: center;
+      transition: border-color 150ms ease, background 150ms ease;
+    }
+    .upload-zone.is-over {
+      border-color: var(--green);
+      background: #edf5f1;
+    }
+    .upload-zone input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .upload-symbol {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 11px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      color: var(--green);
+      background: var(--surface);
+      font-size: 21px;
+    }
+    .upload-zone strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 13px; }
+    .upload-zone span { font-size: 10px; }
+    .upload-preview {
+      display: none;
+      min-height: 190px;
+      overflow: hidden;
+      border-radius: 16px;
+      background: #e5ded1;
+    }
+    .upload-preview.is-visible { display: block; }
+    .upload-preview img { width: 100%; height: 230px; object-fit: cover; }
+    .form-section { margin-top: 16px; }
+    .form-label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+      font-size: 10px;
+      font-weight: 650;
+    }
+    .form-select {
+      width: 100%;
+      min-height: 40px;
+      padding: 0 11px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--ink);
+      background: #fff;
+      font-size: 11px;
+    }
+    .upload-check {
+      margin-top: 13px;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.6;
+    }
+    .upload-check input { margin-top: 2px; accent-color: var(--green); }
+    .extract-progress { display: none; padding: 8px 0 6px; }
+    .extract-progress.is-visible { display: block; }
+    .extract-steps { display: grid; gap: 8px; margin-top: 16px; }
+    .extract-step {
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      color: var(--muted);
+      background: #faf7f1;
+      font-size: 10px;
+    }
+    .extract-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #d0c9be;
+    }
+    .extract-step.is-running { color: var(--ink); border-color: #9ec3b4; background: #edf5f1; }
+    .extract-step.is-running .extract-dot { background: var(--orange); animation: pulse 850ms infinite; }
+    .extract-step.is-done .extract-dot { background: var(--green); }
+    @keyframes pulse { 50% { opacity: 0.35; } }
+
+    .explanation-photo {
+      position: relative;
+      height: 184px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      border-radius: 14px;
+      background: var(--scene-bg);
+    }
+    .explanation-photo::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(0deg, rgba(12, 34, 28, 0.35), transparent 50%);
+    }
+    .explanation-score {
+      position: relative;
+      width: 112px;
+      height: 112px;
+      margin: 0 auto 12px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: conic-gradient(var(--green) var(--score-angle), #e2ddd3 0);
+    }
+    .explanation-score::before {
+      content: "";
+      position: absolute;
+      inset: 9px;
+      border-radius: 50%;
+      background: var(--surface);
+    }
+    .score-inner {
+      position: relative;
+      text-align: center;
+    }
+    .score-inner strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 28px;
+      line-height: 1;
+    }
+    .score-inner span { color: var(--muted); font-size: 9px; }
+    .explanation-heading {
+      margin: 20px 0 9px;
+      font-family: var(--serif);
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .evidence-list {
+      display: grid;
+      gap: 11px;
+    }
+    .evidence-item {
+      display: grid;
+      grid-template-columns: 54px minmax(0, 1fr) 36px;
+      align-items: center;
+      gap: 9px;
+    }
+    .evidence-name { color: var(--muted); font-size: 10px; }
+    .evidence-track {
+      height: 5px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e8e3d9;
+    }
+    .evidence-fill {
+      width: var(--value);
+      height: 100%;
+      border-radius: inherit;
+      background: var(--green);
+    }
+    .evidence-item:nth-child(2) .evidence-fill { background: #d49a69; }
+    .evidence-item:nth-child(3) .evidence-fill { background: #938baa; }
+    .evidence-value { color: var(--ink); font-size: 10px; font-weight: 650; text-align: right; }
+    .reason-box {
+      margin-top: 16px;
+      padding: 12px;
+      border-left: 2px solid var(--orange);
+      color: var(--muted);
+      background: #faf1e8;
+      font-size: 10px;
+      line-height: 1.75;
+    }
+    .reason-box strong { color: var(--ink); }
+    .privacy-note {
+      margin-top: 14px;
+      padding: 11px 12px;
+      border: 1px solid #c9ded5;
+      border-radius: 10px;
+      color: #3c6055;
+      background: #edf5f1;
+      font-size: 9px;
+      line-height: 1.7;
+    }
+    .drawer-actions {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .privacy-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 9px;
+      margin-bottom: 18px;
+    }
+    .privacy-summary-item {
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #faf7f1;
+    }
+    .privacy-summary-item span { color: var(--muted); font-size: 9px; }
+    .privacy-summary-item strong {
+      display: block;
+      margin-top: 4px;
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: 17px;
+    }
+    .permission-list {
+      border-top: 1px solid var(--line);
+    }
+    .permission-row {
+      padding: 13px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .permission-copy strong { display: block; color: var(--ink); font-size: 11px; }
+    .permission-copy span { color: var(--muted); font-size: 9px; }
+    .mini-toggle {
+      position: relative;
+      width: 38px;
+      height: 22px;
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: 999px;
+      background: #c6c0b5;
+    }
+    .mini-toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 150ms ease;
+    }
+    .mini-toggle[aria-pressed="true"] { background: var(--green); }
+    .mini-toggle[aria-pressed="true"]::after { transform: translateX(16px); }
+    .danger-zone {
+      margin-top: 18px;
+      padding: 14px;
+      border: 1px solid #e8c3c3;
+      border-radius: 12px;
+      background: #fcf2f2;
+    }
+    .danger-zone strong { display: block; margin-bottom: 4px; color: #803f3f; font-size: 11px; }
+    .danger-zone p { margin-bottom: 10px; color: #936262; font-size: 9px; line-height: 1.6; }
+    .danger-button {
+      min-height: 33px;
+      padding: 0 11px;
+      border: 1px solid #d2a3a3;
+      border-radius: 8px;
+      color: #8a4242;
+      background: transparent;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .danger-button:hover { color: #fff; background: var(--red); border-color: var(--red); }
+
+    .review-hero {
+      padding: 18px;
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      border-radius: 14px;
+      color: #f8f4eb;
+      background: var(--ink);
+    }
+    .review-index {
+      width: 46px;
+      height: 46px;
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 50%;
+      font-family: var(--serif);
+      font-size: 17px;
+    }
+    .review-hero strong { display: block; margin-bottom: 3px; font-family: var(--serif); font-size: 16px; }
+    .review-hero span { color: rgba(255, 255, 255, 0.64); font-size: 10px; }
+    .review-steps {
+      margin: 18px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 9px;
+      list-style: none;
+      counter-reset: demo-step;
+    }
+    .review-steps li {
+      position: relative;
+      padding: 11px 12px 11px 43px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      background: #faf7f1;
+      font-size: 10px;
+      line-height: 1.65;
+      counter-increment: demo-step;
+    }
+    .review-steps li::before {
+      content: counter(demo-step, decimal-leading-zero);
+      position: absolute;
+      top: 11px;
+      left: 12px;
+      color: var(--orange);
+      font-family: var(--serif);
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .review-steps strong { color: var(--ink); }
+    .question-list {
+      margin: 12px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      list-style: none;
+    }
+    .question-list li {
+      padding: 10px 11px;
+      border-left: 2px solid var(--line-strong);
+      color: var(--muted);
+      background: #fbf8f2;
+      font-size: 10px;
+      line-height: 1.65;
+    }
+
+    .experiment-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .experiment-card {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #faf7f1;
+    }
+    .experiment-card.is-current { border-color: #91b8a8; background: #edf5f1; }
+    .experiment-tag {
+      display: inline-flex;
+      padding: 3px 7px;
+      border-radius: 999px;
+      color: var(--muted);
+      background: #e8e2d8;
+      font-size: 8px;
+      letter-spacing: 0.07em;
+    }
+    .experiment-card.is-current .experiment-tag { color: #245b4e; background: #d5e9e1; }
+    .experiment-name { margin: 9px 0 10px; font-family: var(--serif); font-size: 14px; font-weight: 600; }
+    .experiment-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .experiment-metric span { display: block; color: var(--muted); font-size: 8px; }
+    .experiment-metric strong { font-family: var(--serif); font-size: 16px; font-weight: 600; }
+    .eval-definitions {
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      list-style: none;
+    }
+    .eval-definitions li {
+      padding: 9px 11px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 1.6;
+    }
+    .eval-definitions b { color: var(--ink); font-weight: 650; }
+    .feedback-loop {
+      margin-top: 15px;
+      padding: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      border: 1px solid #e1cfb8;
+      border-radius: 11px;
+      color: #775235;
+      background: #fbf0e5;
+      font-size: 9px;
+    }
+    .feedback-loop strong {
+      display: block;
+      margin-bottom: 2px;
+      color: #5d3b22;
+      font-size: 10px;
+    }
+
+    .owner-banner {
+      padding: 17px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      border-radius: 14px;
+      color: #f8f4eb;
+      background:
+        radial-gradient(circle at 85% 0%, rgba(216, 121, 66, 0.34), transparent 14rem),
+        var(--ink);
+    }
+    .owner-banner-copy strong {
+      display: block;
+      margin-bottom: 4px;
+      font-family: var(--serif);
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .owner-banner-copy span { color: rgba(255, 255, 255, 0.64); font-size: 10px; }
+    .owner-banner-meter {
+      flex: 0 0 auto;
+      padding-left: 18px;
+      border-left: 1px solid rgba(255, 255, 255, 0.18);
+      text-align: right;
+    }
+    .owner-banner-meter strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 24px;
+      font-weight: 500;
+      line-height: 1;
+    }
+    .owner-banner-meter span { color: rgba(255, 255, 255, 0.56); font-size: 8px; }
+    .section-heading-row {
+      margin: 19px 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .section-heading-row h3 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .section-heading-row span { color: var(--muted); font-size: 9px; }
+    .request-list { display: grid; gap: 9px; }
+    .request-card {
+      padding: 13px;
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #faf7f1;
+    }
+    .request-avatar {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: #fff;
+      background: #416f62;
+      font-family: var(--serif);
+      font-size: 14px;
+    }
+    .request-copy { min-width: 0; }
+    .request-copy strong {
+      display: block;
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .request-copy span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 9px;
+      line-height: 1.55;
+    }
+    .request-status {
+      min-width: 72px;
+      text-align: right;
+    }
+    .request-status-label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--yellow);
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    .request-status.is-approved .request-status-label { color: var(--green); }
+    .request-status.is-rejected .request-status-label { color: var(--red); }
+    .request-actions { display: flex; justify-content: flex-end; gap: 4px; }
+    .request-action {
+      min-height: 27px;
+      padding: 0 7px;
+      border: 1px solid var(--line-strong);
+      border-radius: 7px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 8px;
+    }
+    .request-action:hover { color: var(--ink); border-color: var(--ink); }
+    .request-action.is-primary {
+      color: #fff;
+      border-color: var(--green);
+      background: var(--green);
+    }
+    .owner-controls {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 12px;
+    }
+    .owner-control-card {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #faf7f1;
+    }
+    .owner-control-row {
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .owner-control-row:last-child { border-bottom: 0; }
+    .owner-control-row span { color: var(--muted); font-size: 9px; }
+    .owner-control-row strong { color: var(--ink); font-size: 9px; font-weight: 600; }
+    .audit-log {
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      list-style: none;
+    }
+    .audit-log li {
+      position: relative;
+      padding-left: 16px;
+      color: var(--muted);
+      font-size: 8px;
+      line-height: 1.55;
+    }
+    .audit-log li::before {
+      content: "";
+      position: absolute;
+      top: 5px;
+      left: 1px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+    .audit-log b { display: block; color: var(--ink); font-size: 9px; font-weight: 600; }
+
+    .blocked-screen {
+      position: fixed;
+      z-index: 80;
+      inset: 0;
+      display: none;
+      place-items: center;
+      padding: 24px;
+      background: rgba(243, 240, 233, 0.86);
+      backdrop-filter: blur(9px);
+    }
+    .blocked-screen.is-visible { display: grid; }
+    .blocked-card {
+      width: min(460px, 100%);
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+    .blocked-symbol {
+      width: 60px;
+      height: 60px;
+      margin: 0 auto 14px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: var(--green);
+      background: var(--green-soft);
+      font-family: var(--serif);
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .blocked-card h2 { margin-bottom: 7px; font-family: var(--serif); font-size: 24px; font-weight: 600; }
+    .blocked-card p { color: var(--muted); font-size: 11px; line-height: 1.75; }
+
+    .toast-region {
+      position: fixed;
+      z-index: 200;
+      right: 22px;
+      bottom: 22px;
+      display: grid;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .toast {
+      max-width: min(360px, calc(100vw - 44px));
+      padding: 11px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 11px;
+      color: #fff;
+      background: #183b33;
+      box-shadow: 0 12px 34px rgba(19, 43, 37, 0.22);
+      font-size: 10px;
+      animation: toastIn 200ms ease both;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 1080px) {
+      .workspace { grid-template-columns: 260px minmax(0, 1fr); }
+      .photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .hero-note { display: none; }
+    }
+    @media (max-width: 900px) {
+      .app-shell { min-width: 0; grid-template-columns: minmax(0, 1fr); }
+      .sidebar {
+        position: static;
+        min-width: 0;
+        width: 100%;
+        height: auto;
+        padding: 14px 18px;
+        flex-direction: row;
+        align-items: center;
+        gap: 16px;
+        overflow: visible;
+      }
+      .brand { min-width: 150px; }
+      .profile-chip, .nav-label, .sidebar-spacer, .privacy-card, .version { display: none; }
+      .brand-mark { width: 34px; height: 34px; }
+      .brand-name { font-size: 18px; }
+      nav { flex: 1 1 auto; min-width: 0; }
+      .nav-list { display: flex; width: 100%; min-width: 0; justify-content: flex-end; overflow-x: auto; }
+      .nav-button { width: auto; white-space: nowrap; padding: 0 10px; }
+      .nav-glyph, .nav-count { display: none; }
+      .main { min-width: 0; width: 100%; padding: 0 18px 34px; }
+      .metric-strip { grid-template-columns: repeat(2, 1fr); }
+      .metric:nth-child(2) { border-right: 0; }
+      .metric:nth-child(-n + 2) { border-bottom: 1px solid var(--line); }
+      .workspace { grid-template-columns: 1fr; }
+      .query-panel { position: static; display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 16px; }
+      .query-panel .panel-heading { grid-column: 1 / -1; }
+      .portrait-frame { height: 210px; margin: 0; }
+      .query-details { min-width: 0; }
+      .query-facts { margin-top: 0; padding-top: 0; border: 0; }
+      .topbar { min-height: 64px; }
+    }
+    @media (max-width: 680px) {
+      .sidebar { align-items: flex-start; flex-direction: column; }
+      .brand { min-width: 0; }
+      nav { width: 100%; }
+      .nav-list { width: 100%; justify-content: flex-start; }
+      .main { padding-inline: 13px; }
+      .topbar { gap: 10px; }
+      .breadcrumb { display: none; }
+      .status-pill { font-size: 9px; }
+      .top-actions { width: 100%; flex-wrap: wrap; justify-content: space-between; }
+      .page { padding-top: 22px; }
+      .hero { margin-bottom: 18px; }
+      .hero p { font-size: 12px; }
+      .metric { min-height: 68px; padding: 11px 13px; }
+      .metric-value { font-size: 19px; }
+      .query-panel { grid-template-columns: 1fr; }
+      .portrait-frame { height: 250px; }
+      .results-toolbar { align-items: flex-start; flex-direction: column; }
+      .toolbar-actions { justify-content: flex-start; }
+      .photo-grid { grid-template-columns: 1fr; }
+      .photo-visual { height: 230px; }
+      .photo-overlay-actions { top: 190px; }
+      .semantic-bar { align-items: flex-start; flex-wrap: wrap; }
+      .semantic-input { flex-basis: calc(100% - 38px); }
+      .semantic-submit { margin-left: 31px; }
+      .page-footer { align-items: flex-start; flex-direction: column; gap: 7px; }
+      .modal-backdrop { padding: 10px; align-items: flex-end; }
+      .modal { max-height: 94vh; border-radius: 19px 19px 14px 14px; }
+      .modal.is-drawer { margin: 0; }
+      .consent-points, .privacy-summary, .experiment-grid { grid-template-columns: 1fr; }
+      .owner-controls { grid-template-columns: 1fr; }
+      .request-card { grid-template-columns: 34px minmax(0, 1fr); }
+      .request-status { grid-column: 2; text-align: left; }
+      .request-actions { justify-content: flex-start; }
+      .modal-head, .modal-body, .modal-footer { padding-inline: 16px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <div class="brand-name">相寻</div>
+          <div class="brand-sub">PRIVATE MOMENT SEARCH</div>
+        </div>
+      </div>
+
+      <div class="profile-chip">
+        <div class="avatar">林</div>
+        <div>
+          <div class="profile-name">林岚</div>
+          <div class="profile-meta">个人空间 · 已授权</div>
+        </div>
+      </div>
+
+      <nav>
+        <div class="nav-label">浏览</div>
+        <div class="nav-list">
+          <button class="nav-button is-active" type="button" data-nav="discover">
+            <span class="nav-glyph" aria-hidden="true">寻</span>
+            <span>发现照片</span>
+            <span class="nav-count" id="nav-result-count">9</span>
+          </button>
+          <button class="nav-button" type="button" data-nav="favorites">
+            <span class="nav-glyph" aria-hidden="true">收</span>
+            <span>我的收藏</span>
+            <span class="nav-count" id="nav-favorite-count">0</span>
+          </button>
+          <button class="nav-button" type="button" data-nav="upload">
+            <span class="nav-glyph" aria-hidden="true">传</span>
+            <span>上传与索引</span>
+          </button>
+          <button class="nav-button" type="button" data-nav="privacy">
+            <span class="nav-glyph" aria-hidden="true">隐</span>
+            <span>授权与隐私</span>
+          </button>
+          <button class="nav-button" type="button" data-nav="owner">
+            <span class="nav-glyph" aria-hidden="true">管</span>
+            <span>相册协作</span>
+            <span class="nav-count" id="owner-nav-count">2</span>
+          </button>
+          <button class="nav-button" type="button" data-nav="evaluation">
+            <span class="nav-glyph" aria-hidden="true">测</span>
+            <span>体验评估</span>
+          </button>
+        </div>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+      <div class="privacy-card">
+        <div class="privacy-card-top">
+          <span class="privacy-dot" aria-hidden="true"></span>
+          隐私保护生效中
+        </div>
+        <p>只检索你主动授权的相册。上传样本仅用于当前会话，不进入身份库，也不用于监控。</p>
+        <button class="privacy-link" type="button" data-open="privacy">管理授权范围</button>
+      </div>
+      <div class="version">AI-03 · Prototype 0.9</div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumb">
+          <span>AI-03</span>
+          <span class="breadcrumb-sep">/</span>
+          <span>相似人员照片推荐</span>
+          <span class="breadcrumb-sep">/</span>
+          <strong>个人相册发现</strong>
+        </div>
+        <div class="top-actions">
+          <span class="status-pill" id="consent-status">授权范围 3 个相册</span>
+          <button class="icon-button" type="button" data-open="guide">演示导航</button>
+          <button class="icon-button" type="button" aria-label="打开通知" id="notificationButton">通知</button>
+          <div class="avatar" aria-label="林岚的账户">林</div>
+        </div>
+      </header>
+
+      <div class="page">
+        <section class="hero" aria-labelledby="page-title">
+          <div>
+            <div class="eyebrow">Private moment search</div>
+            <h1 id="page-title">找到属于你的那一刻</h1>
+            <p>从已授权的私人相册中，结合人脸、衣着与场景找到与你有关的照片。结果只是视觉相似建议，不作身份认定。</p>
+          </div>
+          <div class="hero-note">
+            <strong>产品边界</strong>
+            仅限本人或已明示同意的联系人，在自己授权的内容范围内发起检索。禁止公众场所监控、身份追踪与批量找人。
+          </div>
+        </section>
+
+        <section class="metric-strip" aria-label="当前检索状态">
+          <div class="metric">
+            <div class="metric-label">授权相册 <span class="metric-live">Live</span></div>
+            <div class="metric-value">3 <small>个</small></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">已索引照片</div>
+            <div class="metric-value">1,248 <small>张</small></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">本次检索耗时</div>
+            <div class="metric-value">428 <small>ms</small></div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">最相关结果</div>
+            <div class="metric-value">94 <small>/ 100</small></div>
+          </div>
+        </section>
+
+        <div class="workspace">
+          <aside class="query-panel" aria-label="检索样本">
+            <div class="panel-heading">
+              <h2>检索样本</h2>
+              <span class="tiny-label">Authorized</span>
+            </div>
+            <div class="portrait-frame">
+              <div class="portrait-hair" aria-hidden="true"></div>
+              <div class="portrait-head" aria-hidden="true"></div>
+              <div class="portrait-neck" aria-hidden="true"></div>
+              <span class="portrait-tag">虚构示例 · 林岚</span>
+              <div class="portrait-caption">
+                <strong>本人照片</strong>
+                <span>已明示授权</span>
+              </div>
+            </div>
+            <div class="query-details">
+              <div class="sample-actions">
+                <button class="primary-button" type="button" data-open="upload">更换检索样本</button>
+                <button class="square-button" type="button" data-open="upload" aria-label="添加一张新照片">+</button>
+              </div>
+              <div class="query-facts">
+                <div class="fact-row"><span>检索范围</span><strong>3 个私人相册</strong></div>
+                <div class="fact-row"><span>授权状态</span><span class="inline-status" id="query-consent-state">有效期至 2026-11-30</span></div>
+                <div class="fact-row"><span>样本保留</span><strong>会话结束后删除</strong></div>
+              </div>
+              <div class="weight-chips" aria-label="匹配权重">
+                <span class="chip weight-chip"><span class="bar" style="--fill: 42%"></span>人脸 <b>42%</b></span>
+                <span class="chip weight-chip"><span class="bar" style="--fill: 35%"></span>衣着 <b>35%</b></span>
+                <span class="chip weight-chip"><span class="bar" style="--fill: 23%"></span>场景 <b>23%</b></span>
+              </div>
+              <button class="text-button" type="button" data-open="privacy">查看授权详情</button>
+            </div>
+          </aside>
+
+          <section class="results-panel" aria-labelledby="results-title">
+            <div class="results-toolbar">
+              <div>
+                <h2 class="results-title" id="results-title">为你找到 9 张照片</h2>
+                <div class="results-sub" id="results-sub">跨 3 个已授权相册，按综合视觉相似度排序</div>
+              </div>
+              <div class="toolbar-actions" aria-label="结果排序与偏好">
+                <div class="segmented" aria-label="排序方式">
+                  <button class="segment is-active" type="button" data-sort="overall">综合</button>
+                  <button class="segment" type="button" data-sort="face">人脸</button>
+                  <button class="segment" type="button" data-sort="outfit">衣着</button>
+                  <button class="segment" type="button" data-sort="scene">场景</button>
+                </div>
+                <button class="switch" id="diversityToggle" type="button" aria-pressed="false">
+                  <span class="switch-track" aria-hidden="true"></span>
+                  增加多样性
+                </button>
+              </div>
+            </div>
+
+            <form class="semantic-bar" id="semanticForm">
+              <span class="semantic-mark" aria-hidden="true">语</span>
+              <label class="sr-only" for="semanticInput">补充语义描述</label>
+              <input class="semantic-input" id="semanticInput" type="search" autocomplete="off" placeholder="补充描述：穿蓝色针织衫，在木屋咖啡馆">
+              <button class="semantic-submit" type="submit">加入描述</button>
+            </form>
+            <div class="query-banner" id="queryBanner">
+              <span id="queryBannerText"></span>
+              <button class="text-button" type="button" id="clearQuery">清除</button>
+            </div>
+
+            <div class="photo-grid" id="photoGrid" aria-live="polite"></div>
+            <div class="empty-state" id="emptyState">
+              <div>
+                <strong>还没有收藏照片</strong>
+                <span>在发现页选择照片右上角的收藏按钮，稍后回来查看。</span>
+                <div style="margin-top:14px">
+                  <button class="secondary-button" type="button" data-nav="discover">返回发现照片</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <footer class="page-footer">
+          <span><strong>AI-03 交互原型</strong> · 示例数据均为虚构，照片以抽象人物示意图表示</span>
+          <span>隐私设计：明示同意 · 可撤回 · 非监控用途 · 不提供身份核验</span>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal-backdrop is-open" id="consentGate" role="dialog" aria-modal="true" aria-labelledby="consentTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="modal-kicker">Consent first</div>
+          <h2 class="modal-title" id="consentTitle">先确认，再开始寻找</h2>
+          <p class="modal-subtitle">相寻会先获得你的明确同意，才读取与检索照片。</p>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="consent-hero">
+          <div class="consent-seal" aria-hidden="true">可撤回</div>
+          <div>
+            <div class="consent-lead">你始终拥有选择权</div>
+            <p class="consent-copy">本例使用虚构的 3 个私人活动相册。你上传的检索样本只在当前会话用作特征提取，不建立可搜索身份库。</p>
+          </div>
+        </div>
+        <div class="consent-points">
+          <div class="consent-point"><b>明确目的</b><span>只帮你找回与自己有关的照片，不推测身份、关系或行踪。</span></div>
+          <div class="consent-point"><b>限定范围</b><span>只搜索你主动授权的相册，并显示授权有效期。</span></div>
+          <div class="consent-point"><b>随时撤回</b><span>撤回后立即停止检索，并进入索引清理流程。</span></div>
+          <div class="consent-point"><b>不用作监控</b><span>产品不提供公共场所找人、批量检索或身份核验能力。</span></div>
+        </div>
+        <label class="consent-check">
+          <input id="consentCheckbox" type="checkbox">
+          <span>我已阅读以上说明，并确认只会在拥有合法使用权的照片上使用该功能。</span>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-button" type="button" id="declineConsent">暂不使用</button>
+        <button class="primary-button" type="button" id="acceptConsent" disabled>同意并进入演示</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="uploadModal" role="dialog" aria-modal="true" aria-labelledby="uploadTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="modal-kicker">Upload &amp; extract</div>
+          <h2 class="modal-title" id="uploadTitle">上传一张检索样本</h2>
+          <p class="modal-subtitle">人脸、衣着与场景特征将在当前设备会话内提取。</p>
+        </div>
+        <button class="modal-close" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="uploadInitial">
+          <div class="upload-zone" id="uploadZone">
+            <input id="photoFile" type="file" accept="image/*" aria-label="选择一张照片">
+            <div>
+              <div class="upload-symbol" aria-hidden="true">＋</div>
+              <strong>拖入或点击选择照片</strong>
+              <span>JPG、PNG、WEBP，建议小于 10 MB</span>
+            </div>
+          </div>
+          <div class="upload-preview" id="uploadPreview">
+            <img id="uploadImage" alt="刚刚上传的检索照片预览">
+          </div>
+          <div class="form-section">
+            <label class="form-label" for="searchScope">检索范围</label>
+            <select class="form-select" id="searchScope">
+              <option>仅在我的 3 个私人相册中检索</option>
+              <option>仅限春日露营相册</option>
+              <option>仅限山间木屋生日会相册</option>
+            </select>
+          </div>
+          <label class="upload-check">
+            <input id="uploadRights" type="checkbox">
+            <span>我确认拥有该照片的合法使用权，并同意为本次视觉检索临时提取特征。此操作不会建立公开身份档案。</span>
+          </label>
+        </div>
+        <div class="extract-progress" id="extractProgress" aria-live="polite">
+          <div class="notice"><strong>正在模拟端云协同特征提取</strong><br>检索样本会在当前会话结束后移除。</div>
+          <div class="extract-steps">
+            <div class="extract-step" data-step="face"><span class="extract-dot"></span>检测人脸与人体区域</div>
+            <div class="extract-step" data-step="embedding"><span class="extract-dot"></span>生成多模态嵌入向量</div>
+            <div class="extract-step" data-step="search"><span class="extract-dot"></span>在已授权向量索引中检索</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-button" type="button" data-close>取消</button>
+        <button class="primary-button" type="button" id="startExtraction">提取特征并检索</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="explanationModal" role="dialog" aria-modal="true" aria-labelledby="explanationTitle">
+    <div class="modal is-drawer">
+      <div class="modal-head">
+        <div>
+          <div class="modal-kicker">Why this result</div>
+          <h2 class="modal-title" id="explanationTitle">推荐解释</h2>
+          <p class="modal-subtitle">这是相似度建议，不是身份认定。</p>
+        </div>
+        <button class="modal-close" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body" id="explanationBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="privacyModal" role="dialog" aria-modal="true" aria-labelledby="privacyTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="modal-kicker">Privacy center</div>
+          <h2 class="modal-title" id="privacyTitle">授权与隐私</h2>
+          <p class="modal-subtitle">管理授权范围、索引状态和数据留存。</p>
+        </div>
+        <button class="modal-close" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="privacy-summary">
+          <div class="privacy-summary-item"><span>生效授权</span><strong>3 个</strong></div>
+          <div class="privacy-summary-item"><span>索引照片</span><strong>1,248</strong></div>
+          <div class="privacy-summary-item"><span>检索样本</span><strong>0 留存</strong></div>
+        </div>
+        <div class="permission-list">
+          <div class="permission-row">
+            <div class="permission-copy"><strong>春日露营 · 2026</strong><span>412 张 · 授权至 2026-11-30</span></div>
+            <button class="mini-toggle" type="button" aria-pressed="true" aria-label="关闭春日露营相册授权"></button>
+          </div>
+          <div class="permission-row">
+            <div class="permission-copy"><strong>山间木屋生日会</strong><span>586 张 · 授权至 2026-11-30</span></div>
+            <button class="mini-toggle" type="button" aria-pressed="true" aria-label="关闭山间木屋相册授权"></button>
+          </div>
+          <div class="permission-row">
+            <div class="permission-copy"><strong>城市漫步 · 周末</strong><span>250 张 · 授权至 2026-10-28</span></div>
+            <button class="mini-toggle" type="button" aria-pressed="true" aria-label="关闭城市漫步相册授权"></button>
+          </div>
+        </div>
+        <div class="notice" style="margin-top:14px">默认保留策略：检索样本不保存；结果反馈以去标识方式保存 30 天，用于排序评估；可随时申请导出或删除。</div>
+        <div class="danger-zone">
+          <strong>撤回全部授权</strong>
+          <p>立即停止所有新检索，并触发向量索引与反馈记录清理。该操作不会删除你原始相册中的照片。</p>
+          <button class="danger-button" type="button" data-open="withdraw">撤回全部授权</button>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="primary-button" type="button" data-close>完成</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="withdrawModal" role="dialog" aria-modal="true" aria-labelledby="withdrawTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="modal-kicker">Revoke consent</div>
+          <h2 class="modal-title" id="withdrawTitle">确认撤回全部授权？</h2>
+          <p class="modal-subtitle">系统会立即停止检索，并清理由本次授权生成的索引。</p>
+        </div>
+        <button class="modal-close" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="notice"><strong>不会删除原始照片。</strong><br>仅移除相寻生成的向量特征、检索索引和去标识反馈；处理记录会保留 90 天以满足审计要求。</div>
+      </div>
+      <div class="modal-footer">
+        <button class="secondary-button" type="button" data-close>保留授权</button>
+        <button class="danger-button" type="button" id="confirmWithdraw">确认撤回</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="guideModal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+    <div class="modal">
+      <div class="modal-head">
+        <div>
+          <div class="modal-kicker">Teacher review guide</div>
+          <h2 class="modal-title" id="guideTitle">三分钟评审路径</h2>
+          <p class="modal-subtitle">按顺序体验，即可覆盖 AI-03 的全部核心功能。</p>
+        </div>
+        <button class="modal-close" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="review-hero">
+          <div class="review-index">03</div>
+          <div>
+            <strong>相似人员照片推荐 · 交互验证</strong>
+            <span>重点确认：产品边界、推荐解释、反馈闭环与伦理设计是否合理。</span>
+          </div>
+        </div>
+        <ol class="review-steps">
+          <li><strong>看边界。</strong>说明为什么产品只面向授权私人相册，以及“不做身份认定”的设计。</li>
+          <li><strong>换样本。</strong>点击“更换检索样本”，观察授权检查与特征提取状态。</li>
+          <li><strong>改排序。</strong>切换综合、人脸、衣着、场景，并补充一句自然语言描述。</li>
+          <li><strong>看解释。</strong>点开任一照片，确认系统如何展示三类匹配证据。</li>
+          <li><strong>做反馈。</strong>对结果选择相关或不相关，观察推荐状态和评估记录。</li>
+          <li><strong>撤回授权。</strong>进入“授权与隐私”，演示停止检索和索引清理确认。</li>
+          <li><strong>换到所有者视角。</strong>进入“相册协作”，审批检索申请并查看审计日志。</li>
+        </ol>
+      </div>
+      <div class="modal-footer">
+        <button class="primary-button" type="button" data-close>开始评审</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="evaluationModal" role="dialog" aria-modal="true" aria-labelledby="evaluationTitle">
+    <div class="modal is-wide">
+      <div class="modal-head">
+        <div>
+          <div class="modal-kicker">Evaluation &amp; experiment</div>
+          <h2 class="modal-title" id="evaluationTitle">推荐效果与 A/B 实验</h2>
+          <p class="modal-subtitle">演示值用于说明指标口径，不代表真实模型评测结果。</p>
+        </div>
+        <button class="modal-close" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="experiment-grid">
+          <div class="experiment-card is-current">
+            <span class="experiment-tag">当前实验组 · 15%</span>
+            <div class="experiment-name">均衡多模态排序</div>
+            <div class="experiment-metrics">
+              <div class="experiment-metric"><strong>86.4%</strong><span>Top-K 召回</span></div>
+              <div class="experiment-metric"><strong>0.821</strong><span>NDCG@10</span></div>
+              <div class="experiment-metric"><strong>428ms</strong><span>P95 响应</span></div>
+            </div>
+          </div>
+          <div class="experiment-card">
+            <span class="experiment-tag">对照组 · 85%</span>
+            <div class="experiment-name">人脸特征优先</div>
+            <div class="experiment-metrics">
+              <div class="experiment-metric"><strong>88.9%</strong><span>Top-K 召回</span></div>
+              <div class="experiment-metric"><strong>0.803</strong><span>NDCG@10</span></div>
+              <div class="experiment-metric"><strong>411ms</strong><span>P95 响应</span></div>
+            </div>
+          </div>
+        </div>
+        <ul class="eval-definitions">
+          <li><b>Top-K 召回率</b>：在人工确认的相关照片中，前 K 个结果覆盖的比例。目标为持续提升召回，而不是以模型置信度替代人工判断。</li>
+          <li><b>NDCG@10</b>：同时衡量前 10 个结果的相关性与排序位置，并惩罚高相关照片被排得过低。</li>
+          <li><b>响应时间</b>：从提交样本到首屏返回结果的服务端耗时；课程验收目标为 P95 小于 500ms。</li>
+          <li><b>多样性</b>：同一相册或同一场景不应垄断结果，至少保留 30% 的名额给其他授权相册。</li>
+        </ul>
+        <div class="feedback-loop">
+          <div><strong>反馈闭环已接入</strong>相关/不相关反馈会进入去标识训练集，调低同类误召回权重。</div>
+          <span id="feedbackSummary">本次已反馈 0 条</span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="primary-button" type="button" data-close>返回结果</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="ownerModal" role="dialog" aria-modal="true" aria-labelledby="ownerTitle">
+    <div class="modal is-wide">
+      <div class="modal-head">
+        <div>
+          <div class="modal-kicker">Album owner console</div>
+          <h2 class="modal-title" id="ownerTitle">相册协作与检索审批</h2>
+          <p class="modal-subtitle">作为相册所有者，决定谁可以在什么范围内找回照片。</p>
+        </div>
+        <button class="modal-close" type="button" data-close aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="owner-banner">
+          <div class="owner-banner-copy">
+            <strong>你正在管理「山间木屋生日会」</strong>
+            <span>586 张照片 · 12 位已登记参与者 · 索引已通过隐私检查</span>
+          </div>
+          <div class="owner-banner-meter">
+            <strong id="ownerPendingCount">2</strong>
+            <span>待处理申请</span>
+          </div>
+        </div>
+
+        <div class="section-heading-row">
+          <h3>检索申请</h3>
+          <span>仅可申请找回与本人有关的照片</span>
+        </div>
+        <div class="request-list" id="ownerRequestList">
+          <div class="request-card" data-request-card="R-1042">
+            <div class="request-avatar">陈</div>
+            <div class="request-copy">
+              <strong>陈默请求检索生日会照片</strong>
+              <span>申请时间 10:42 · 请求范围：本人照片 · 建议授权 7 天</span>
+            </div>
+            <div class="request-status">
+              <span class="request-status-label">等待处理</span>
+              <div class="request-actions">
+                <button class="request-action is-primary" type="button" data-request-action="approve" data-request-id="R-1042" data-request-name="陈默">同意 7 天</button>
+                <button class="request-action" type="button" data-request-action="reject" data-request-id="R-1042" data-request-name="陈默">拒绝</button>
+              </div>
+            </div>
+          </div>
+          <div class="request-card" data-request-card="R-1041">
+            <div class="request-avatar">周</div>
+            <div class="request-copy">
+              <strong>周宁请求检索春日露营照片</strong>
+              <span>申请时间 09:18 · 请求范围：本人照片 · 随申请附用途确认</span>
+            </div>
+            <div class="request-status">
+              <span class="request-status-label">等待处理</span>
+              <div class="request-actions">
+                <button class="request-action is-primary" type="button" data-request-action="approve" data-request-id="R-1041" data-request-name="周宁">同意 7 天</button>
+                <button class="request-action" type="button" data-request-action="reject" data-request-id="R-1041" data-request-name="周宁">拒绝</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-heading-row">
+          <h3>协作规则</h3>
+          <span>修改将记入审计日志</span>
+        </div>
+        <div class="owner-controls">
+          <div class="owner-control-card">
+            <div class="owner-control-row">
+              <div><strong>允许已登记参与者申请检索</strong><span>只接受相册参与者的实名账户</span></div>
+              <button class="mini-toggle" type="button" aria-pressed="true" aria-label="允许参与者申请检索"></button>
+            </div>
+            <div class="owner-control-row">
+              <div><strong>禁止批量导出与公开分享</strong><span>结果链接仅申请人可见，24 小时失效</span></div>
+              <button class="mini-toggle" type="button" aria-pressed="true" aria-label="禁止批量导出与公开分享"></button>
+            </div>
+            <div class="owner-control-row">
+              <div><strong>每张结果显示授权来源</strong><span>便于参与者了解照片来自哪个授权相册</span></div>
+              <button class="mini-toggle" type="button" aria-pressed="true" aria-label="显示授权来源"></button>
+            </div>
+          </div>
+          <div class="owner-control-card">
+            <div class="section-heading-row" style="margin:0 0 8px">
+              <h3>最近审计事件</h3>
+              <span>实时</span>
+            </div>
+            <ul class="audit-log" id="auditLog">
+              <li><b>10:35 · 隐私检查通过</b>相册授权、参与者名单、用途声明完整</li>
+              <li><b>09:18 · 申请已提交</b>周宁申请检索本人照片，等待所有者处理</li>
+              <li><b>昨日 · 临时授权到期</b>检索权限已自动失效，索引未删除</li>
+            </ul>
+          </div>
+        </div>
+        <div class="notice" style="margin-top:12px">所有者只能审批“检索范围、有效期与用途”，不能授权申请人查看与自己无关的其他人。系统默认不会向任何申请人展示完整原始相册。</div>
+      </div>
+      <div class="modal-footer">
+        <button class="primary-button" type="button" data-close>完成审批</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="blocked-screen" id="blockedScreen" role="alert">
+    <div class="blocked-card">
+      <div class="blocked-symbol" aria-hidden="true">止</div>
+      <h2>检索已停止</h2>
+      <p>你已撤回全部授权。相寻已停止访问相册并进入索引清理流程；原始照片未受影响。</p>
+      <button class="primary-button" type="button" id="restoreDemo">重新授权，继续演示</button>
+    </div>
+  </div>
+
+  <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="false"></div>
+
+  <script>
+    const photos = [
+      {
+        id: "P-0231",
+        title: "木屋前的蓝色针织衫",
+        date: "2026.04.18 · 14:32",
+        album: "春日露营",
+        scene: "木屋",
+        outfit: "蓝色针织衫",
+        description: "身穿蓝色针织衫，站在木屋与树林交界处；侧身，柔和自然光。",
+        score: 94,
+        face: 95,
+        outfitScore: 92,
+        sceneScore: 91,
+        reason: "人脸轮廓、蓝色针织纹理与森林木屋场景同时高度接近。",
+        bg: "linear-gradient(145deg, #92aa96 0%, #c7c6a5 49%, #765d43 50%, #4c5541 100%)",
+        ground: "linear-gradient(165deg, #526348, #2f493a)",
+        skin: "#d6aa84",
+        hair: "#352722",
+        outfitColor: "#315f79",
+        personLeft: "39%",
+        saved: false,
+        feedback: null
+      },
+      {
+        id: "P-0186",
+        title: "窗边的侧脸",
+        date: "2026.04.18 · 15:08",
+        album: "春日露营",
+        scene: "木屋",
+        outfit: "米白衬衫",
+        description: "坐在木屋窗边，米白衬衫，侧脸看向窗外，背景有绿色植物。",
+        score: 91,
+        face: 93,
+        outfitScore: 78,
+        sceneScore: 96,
+        reason: "人脸角度与瞳孔纹理接近；木屋窗框、坐姿和自然光构成场景证据。",
+        bg: "linear-gradient(145deg, #d8c7a0 0%, #8f936f 47%, #6d6047 48%, #4b4639 100%)",
+        ground: "linear-gradient(155deg, #6f654a, #3f4735)",
+        skin: "#dcb28c",
+        hair: "#30241f",
+        outfitColor: "#d8ccb8",
+        personLeft: "43%",
+        saved: false,
+        feedback: null
+      },
+      {
+        id: "P-0274",
+        title: "拿起咖啡的瞬间",
+        date: "2026.04.18 · 16:21",
+        album: "山间木屋生日会",
+        scene: "咖啡馆",
+        outfit: "蓝色针织衫",
+        description: "室内木桌旁举起咖啡杯，蓝色上衣，暖色灯光和窗外绿植。",
+        score: 89,
+        face: 84,
+        outfitScore: 95,
+        sceneScore: 87,
+        reason: "衣着颜色与纹理强匹配；暖色室内光和木质家具支持同场景推荐。",
+        bg: "linear-gradient(145deg, #b99c76 0%, #857058 44%, #604c38 45%, #3c382e 100%)",
+        ground: "linear-gradient(160deg, #73543a, #3b3028)",
+        skin: "#d9ac86",
+        hair: "#362822",
+        outfitColor: "#2e5d78",
+        personLeft: "35%",
+        saved: false,
+        feedback: null
+      },
+      {
+        id: "P-0154",
+        title: "树林里的回头",
+        date: "2026.04.17 · 11:46",
+        album: "春日露营",
+        scene: "树林",
+        outfit: "卡其外套",
+        description: "在树林小径回头，卡其色外套，背景虚化，侧逆光。",
+        score: 86,
+        face: 91,
+        outfitScore: 73,
+        sceneScore: 84,
+        reason: "回头姿态与面部特征较接近；树林路径和服装轮廓使结果进入前排。",
+        bg: "linear-gradient(145deg, #8b9e75 0%, #607754 49%, #334936 50%, #273b30 100%)",
+        ground: "linear-gradient(165deg, #637345, #334531)",
+        skin: "#d3a27a",
+        hair: "#3c2b24",
+        outfitColor: "#a48f6f",
+        personLeft: "29%",
+        saved: false,
+        feedback: null
+      },
+      {
+        id: "P-0312",
+        title: "生日会上的笑声",
+        date: "2026.04.20 · 19:42",
+        album: "山间木屋生日会",
+        scene: "室内",
+        outfit: "深绿上衣",
+        description: "生日蛋糕前的抓拍，深绿色上衣，暖黄灯串，正面笑着。",
+        score: 81,
+        face: 88,
+        outfitScore: 79,
+        sceneScore: 77,
+        reason: "面部特征与笑容接近；光线和聚会背景提供辅助证据，但服装颜色不同。",
+        bg: "linear-gradient(145deg, #bf8b68 0%, #8d654f 45%, #493636 46%, #2b2d2a 100%)",
+        ground: "linear-gradient(155deg, #6b4a3b, #302c27)",
+        skin: "#daad87",
+        hair: "#33231f",
+        outfitColor: "#42624c",
+        personLeft: "48%",
+        saved: false,
+        feedback: null
+      },
+      {
+        id: "P-0098",
+        title: "沿街散步",
+        date: "2026.03.29 · 10:15",
+        album: "城市漫步",
+        scene: "城市",
+        outfit: "蓝色针织衫",
+        description: "城市街角行走，蓝色针织衫，手持相机，背景建筑与树影。",
+        score: 78,
+        face: 75,
+        outfitScore: 94,
+        sceneScore: 65,
+        reason: "蓝色针织衫与身形轮廓相似；场景已变化，因此综合分数低于活动内照片。",
+        bg: "linear-gradient(145deg, #c9c4b8 0%, #9b968c 42%, #696a65 43%, #3d494a 100%)",
+        ground: "linear-gradient(165deg, #92908a, #4b5657)",
+        skin: "#d5a57f",
+        hair: "#392821",
+        outfitColor: "#315b78",
+        personLeft: "54%",
+        saved: false,
+        feedback: null
+      },
+      {
+        id: "P-0288",
+        title: "木桌前写卡片",
+        date: "2026.04.19 · 09:20",
+        album: "山间木屋生日会",
+        scene: "木屋",
+        outfit: "米白衬衫",
+        description: "在木桌前低头写卡片，米白衬衫，手边有花和信封。",
+        score: 74,
+        face: 68,
+        outfitScore: 83,
+        sceneScore: 86,
+        reason: "衣着、桌面和室内空间相似；低头遮挡面部，因此人脸证据较弱。",
+        bg: "linear-gradient(145deg, #d9c39c 0%, #b0a17f 46%, #7a674d 47%, #4a4638 100%)",
+        ground: "linear-gradient(160deg, #8d744f, #514733)",
+        skin: "#d8aa84",
+        hair: "#31241e",
+        outfitColor: "#d8c8ad",
+        personLeft: "44%",
+        saved: false,
+        feedback: null
+      },
+      {
+        id: "P-0119",
+        title: "天桥下的风",
+        date: "2026.03.29 · 16:06",
+        album: "城市漫步",
+        scene: "城市",
+        outfit: "灰色风衣",
+        description: "站在天桥下，灰色风衣，风吹起衣角，背景车流虚化。",
+        score: 69,
+        face: 79,
+        outfitScore: 55,
+        sceneScore: 61,
+        reason: "部分面部区域相似；服装与场景差异明显，作为补充结果保留。",
+        bg: "linear-gradient(145deg, #b7c0c1 0%, #8b999b 44%, #5e686b 45%, #394649 100%)",
+        ground: "linear-gradient(160deg, #7b8585, #414c4e)",
+        skin: "#d6a781",
+        hair: "#372821",
+        outfitColor: "#8e8580",
+        personLeft: "37%",
+        saved: false,
+        feedback: null
+      },
+      {
+        id: "P-0208",
+        title: "帐篷旁的合照",
+        date: "2026.04.18 · 13:57",
+        album: "春日露营",
+        scene: "露营",
+        outfit: "酒红围巾",
+        description: "帐篷旁合影，酒红围巾，周围有多位已同意出镜的朋友。",
+        score: 65,
+        face: 62,
+        outfitScore: 67,
+        sceneScore: 90,
+        reason: "同一露营活动与相近时间提供较强场景证据，但人物较小且被部分遮挡。",
+        bg: "linear-gradient(145deg, #8ea18b 0%, #b6ae90 45%, #6e7b5c 46%, #3f5138 100%)",
+        ground: "linear-gradient(160deg, #6e7d4e, #405333)",
+        skin: "#d6a880",
+        hair: "#382720",
+        outfitColor: "#78434c",
+        personLeft: "34%",
+        saved: false,
+        feedback: null
+      }
+    ];
+
+    const state = {
+      view: "discover",
+      sort: "overall",
+      query: "",
+      diversity: false,
+      consented: true,
+      selectedId: null,
+      feedbackCount: 0
+    };
+
+    const modalIds = [
+      "consentGate", "uploadModal", "explanationModal", "privacyModal",
+      "withdrawModal", "guideModal", "evaluationModal", "ownerModal"
+    ];
+    const photoGrid = document.getElementById("photoGrid");
+    const emptyState = document.getElementById("emptyState");
+    const resultsTitle = document.getElementById("results-title");
+    const resultsSub = document.getElementById("results-sub");
+    const queryBanner = document.getElementById("queryBanner");
+    const queryBannerText = document.getElementById("queryBannerText");
+    const semanticInput = document.getElementById("semanticInput");
+    const toastRegion = document.getElementById("toastRegion");
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function toast(message) {
+      const item = document.createElement("div");
+      item.className = "toast";
+      item.textContent = message;
+      toastRegion.appendChild(item);
+      window.setTimeout(() => {
+        item.style.opacity = "0";
+        item.style.transform = "translateY(4px)";
+        item.style.transition = "opacity 180ms ease, transform 180ms ease";
+        window.setTimeout(() => item.remove(), 200);
+      }, 2800);
+    }
+
+    function updateOwnerPending() {
+      const pending = [...document.querySelectorAll("#ownerRequestList .request-status-label")]
+        .filter(label => label.textContent.includes("等待处理")).length;
+      document.getElementById("ownerPendingCount").textContent = String(pending);
+      document.getElementById("owner-nav-count").textContent = String(pending);
+    }
+
+    function addAudit(title, detail) {
+      const log = document.getElementById("auditLog");
+      const item = document.createElement("li");
+      item.innerHTML = `<b>${escapeHtml(title)}</b>${escapeHtml(detail)}`;
+      log.prepend(item);
+      while (log.children.length > 4) log.lastElementChild.remove();
+    }
+
+    function handleOwnerRequest(button) {
+      const card = button.closest("[data-request-card]");
+      const name = button.dataset.requestName;
+      const requestId = button.dataset.requestId;
+      if (!card || !name || !requestId) return;
+      const approved = button.dataset.requestAction === "approve";
+      const status = card.querySelector(".request-status");
+      status.className = "request-status " + (approved ? "is-approved" : "is-rejected");
+      status.innerHTML = approved
+        ? "<span class=\"request-status-label\">已同意 · 7 天</span><span style=\"color:var(--muted);font-size:8px\">可随时撤回</span>"
+        : "<span class=\"request-status-label\">已拒绝</span><span style=\"color:var(--muted);font-size:8px\">申请人会收到通知</span>";
+      const time = new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+      addAudit(
+        `${time} · ${approved ? "检索申请已同意" : "检索申请已拒绝"}`,
+        approved
+          ? `${name}仅可在 7 天内检索本人照片；范围限制与临时链接策略已生效。`
+          : `${name}的申请已拒绝，未获得任何相册访问权限。`
+      );
+      updateOwnerPending();
+      toast(approved ? `已同意 ${name} 的 7 天检索申请` : `已拒绝 ${name} 的检索申请`);
+    }
+
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      modal.classList.add("is-open");
+      document.body.style.overflow = "hidden";
+      const focusTarget = modal.querySelector(".primary-button, .secondary-button, button");
+      window.setTimeout(() => focusTarget && focusTarget.focus(), 30);
+    }
+
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      modal.classList.remove("is-open");
+      if (![...document.querySelectorAll(".modal-backdrop")].some(item => item.classList.contains("is-open"))) {
+        document.body.style.overflow = "";
+      }
+    }
+
+    function closeAllModals() {
+      modalIds.forEach(id => closeModal(id));
+      document.body.style.overflow = "";
+    }
+
+    function sceneMarkup(photo, mini = false) {
+      const person = mini ? "" : `
+        <div class="mini-person" style="--person-left:${photo.personLeft};--outfit:${photo.outfitColor};--skin:${photo.skin};--hair:${photo.hair}">
+          <span class="mini-hair"></span>
+        </div>`;
+      return `
+        <div class="photo-visual" style="--scene-bg:${photo.bg};--scene-ground:${photo.ground};--outfit:${photo.outfitColor};--skin:${photo.skin};--hair:${photo.hair};--person-left:${photo.personLeft}">
+          <span class="scene-orb"></span>
+          <span class="scene-line"></span>
+          <span class="scene-block"></span>
+          <span class="scene-leaf"></span>
+          ${person}
+        </div>`;
+    }
+
+    function scoreBySort(photo) {
+      if (state.sort === "face") return photo.face;
+      if (state.sort === "outfit") return photo.outfitScore;
+      if (state.sort === "scene") return photo.sceneScore;
+      return photo.score;
+    }
+
+    function getQueryBoost(photo) {
+      if (!state.query) return 0;
+      const q = state.query.toLowerCase();
+      let boost = 0;
+      if ((q.includes("蓝") || q.includes("针织")) && photo.outfit.includes("蓝")) boost += 12;
+      if ((q.includes("木屋") || q.includes("木桌")) && photo.scene.includes("木屋")) boost += 10;
+      if ((q.includes("咖啡") || q.includes("暖")) && (photo.title.includes("咖啡") || photo.scene.includes("咖啡馆"))) boost += 8;
+      if ((q.includes("树林") || q.includes("森林")) && (photo.scene.includes("树林") || photo.title.includes("树林"))) boost += 8;
+      return boost;
+    }
+
+    function sortedPhotos() {
+      let list = photos
+        .filter(photo => state.view !== "favorites" || photo.saved)
+        .slice()
+        .sort((a, b) => {
+          const diff = (scoreBySort(b) + getQueryBoost(b)) - (scoreBySort(a) + getQueryBoost(a));
+          if (diff !== 0) return diff;
+          return a.id.localeCompare(b.id);
+        });
+
+      if (state.diversity && list.length > 2) {
+        const buckets = new Map();
+        list.forEach(photo => {
+          const key = photo.album + "|" + photo.scene;
+          if (!buckets.has(key)) buckets.set(key, []);
+          buckets.get(key).push(photo);
+        });
+        const bucketList = [...buckets.values()];
+        const diverse = [];
+        let added = true;
+        while (added) {
+          added = false;
+          bucketList.forEach(bucket => {
+            if (bucket.length) {
+              diverse.push(bucket.shift());
+              added = true;
+            }
+          });
+        }
+        list = diverse;
+      }
+      return list;
+    }
+
+    function renderPhotos() {
+      const list = sortedPhotos();
+      const shownList = state.view === "favorites" ? list : list.slice(0, 9);
+      photoGrid.innerHTML = "";
+      emptyState.classList.toggle("is-visible", shownList.length === 0);
+      photoGrid.style.display = shownList.length ? "grid" : "none";
+
+      shownList.forEach((photo, index) => {
+        const card = document.createElement("article");
+        card.className = "photo-card" + (photo.feedback === "irrelevant" ? " is-dismissed" : "");
+        card.style.animationDelay = `${Math.min(index * 30, 180)}ms`;
+        const score = Math.min(99, scoreBySort(photo) + getQueryBoost(photo));
+        card.innerHTML = `
+          ${sceneMarkup(photo)}
+          <span class="photo-badge">视觉相似</span>
+          <span class="score-badge" aria-label="匹配分 ${score}">${score}<small>/100</small></span>
+          <div class="photo-overlay-actions">
+            <button class="overlay-action ${photo.saved ? "is-saved" : ""}" type="button"
+              data-action="save" data-id="${photo.id}" aria-label="${photo.saved ? "取消收藏" : "收藏"} ${escapeHtml(photo.title)}"
+              aria-pressed="${photo.saved}">${photo.saved ? "已收" : "收藏"}</button>
+            <button class="overlay-action" type="button" data-action="explain" data-id="${photo.id}"
+              aria-label="查看 ${escapeHtml(photo.title)} 的推荐解释">解释</button>
+          </div>
+          <div class="photo-info">
+            <div class="photo-title-row">
+              <div style="min-width:0">
+                <div class="photo-title">${escapeHtml(photo.title)}</div>
+                <div class="photo-date">${escapeHtml(photo.date)} · ${escapeHtml(photo.album)}</div>
+              </div>
+              <span class="similarity-label">${Math.round(score / 10)}成相似</span>
+            </div>
+            <div class="photo-reason">${escapeHtml(photo.reason)}</div>
+            <div class="factor-row" aria-label="人脸、衣着、场景细分">
+              <div class="factor-mini"><span>人脸 <b>${photo.face}</b></span></div>
+              <div class="factor-mini"><span>衣着 <b>${photo.outfitScore}</b></span></div>
+              <div class="factor-mini"><span>场景 <b>${photo.sceneScore}</b></span></div>
+            </div>
+            <div class="feedback-row">
+              <span class="feedback-copy">${photo.feedback ? (photo.feedback === "relevant" ? "已记录：有帮助" : "已记录：不相关") : "这个结果准确吗？"}</span>
+              <div class="feedback-actions">
+                <button class="feedback-button ${photo.feedback === "relevant" ? "is-selected" : ""}" type="button"
+                  data-action="feedback" data-feedback="relevant" data-id="${photo.id}" aria-pressed="${photo.feedback === "relevant"}">相关</button>
+                <button class="feedback-button ${photo.feedback === "irrelevant" ? "is-selected" : ""}" type="button"
+                  data-action="feedback" data-feedback="irrelevant" data-id="${photo.id}" aria-pressed="${photo.feedback === "irrelevant"}">不相关</button>
+              </div>
+            </div>
+            <div class="dismiss-note">已降低同类结果权重，可在反馈中撤销。</div>
+          </div>`;
+        photoGrid.appendChild(card);
+      });
+
+      if (shownList.length) {
+        const footer = document.createElement("div");
+        footer.className = "grid-footer";
+        footer.innerHTML = `
+          <span class="model-note">结果多样性已开启</span>
+          <span>${state.view === "favorites" ? "收藏内容仅你可见" : "首屏展示 9 条，完整 Top-K 共 12 条"}</span>`;
+        photoGrid.appendChild(footer);
+      }
+
+      resultsTitle.textContent = state.view === "favorites" ? `已收藏 ${list.length} 张照片` : `为你找到 ${list.length + 3} 张照片`;
+      resultsSub.textContent = state.view === "favorites"
+        ? "收藏内容仅你可见，未进入公开推荐"
+        : `跨 ${state.diversity ? "不同场景和相册" : "3 个已授权相册"}，按${sortLabel(state.sort)}排序`;
+      document.getElementById("nav-result-count").textContent = list.length + 3;
+      document.getElementById("nav-favorite-count").textContent = photos.filter(photo => photo.saved).length;
+      document.getElementById("feedbackSummary").textContent = `本次已反馈 ${state.feedbackCount} 条`;
+    }
+
+    function sortLabel(sort) {
+      return ({ overall: "综合视觉相似度", face: "人脸特征", outfit: "衣着特征", scene: "场景特征" })[sort];
+    }
+
+    function switchView(view) {
+      state.view = view;
+      document.querySelectorAll("[data-nav]").forEach(button => {
+        button.classList.toggle("is-active", button.dataset.nav === view);
+      });
+      renderPhotos();
+    }
+
+    function handleNav(view) {
+      if (view === "discover" || view === "favorites") {
+        closeAllModals();
+        switchView(view);
+        document.querySelector(".results-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (view === "upload") openModal("uploadModal");
+      if (view === "privacy") openModal("privacyModal");
+      if (view === "evaluation") openModal("evaluationModal");
+      if (view === "owner") openModal("ownerModal");
+    }
+
+    function openExplanation(id) {
+      const photo = photos.find(item => item.id === id);
+      if (!photo) return;
+      state.selectedId = id;
+      const body = document.getElementById("explanationBody");
+      const score = Math.min(99, scoreBySort(photo) + getQueryBoost(photo));
+      body.innerHTML = `
+        ${sceneMarkup(photo)}
+        <div class="explanation-score" style="--score-angle:${score * 3.6}deg">
+          <div class="score-inner"><strong>${score}</strong><span>综合相似度</span></div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-family:var(--serif);font-size:17px;font-weight:600">${escapeHtml(photo.title)}</div>
+          <div style="margin-top:3px;color:var(--muted);font-size:9px">${escapeHtml(photo.date)} · ${escapeHtml(photo.album)}</div>
+        </div>
+        <h3 class="explanation-heading">系统看到了什么</h3>
+        <div class="evidence-list">
+          <div class="evidence-item"><span class="evidence-name">人脸特征</span><div class="evidence-track"><div class="evidence-fill" style="--value:${photo.face}%"></div></div><span class="evidence-value">${photo.face}</span></div>
+          <div class="evidence-item"><span class="evidence-name">衣着特征</span><div class="evidence-track"><div class="evidence-fill" style="--value:${photo.outfitScore}%"></div></div><span class="evidence-value">${photo.outfitScore}</span></div>
+          <div class="evidence-item"><span class="evidence-name">场景特征</span><div class="evidence-track"><div class="evidence-fill" style="--value:${photo.sceneScore}%"></div></div><span class="evidence-value">${photo.sceneScore}</span></div>
+        </div>
+        <div class="reason-box"><strong>为什么推荐：</strong>${escapeHtml(photo.description)}<br>${escapeHtml(photo.reason)}</div>
+        <div class="privacy-note">解释只说明视觉特征的相似依据，不证明照片中的人是真实身份，也不用于身份核验。涉及其他人时，系统仅使用已获授权的内容。</div>
+        <div class="drawer-actions">
+          <button class="secondary-button" type="button" data-action="feedback" data-feedback="relevant" data-id="${photo.id}">这个结果有帮助</button>
+          <button class="secondary-button" type="button" data-action="feedback" data-feedback="irrelevant" data-id="${photo.id}">不相关</button>
+        </div>`;
+      openModal("explanationModal");
+    }
+
+    function setFeedback(id, type) {
+      const photo = photos.find(item => item.id === id);
+      if (!photo) return;
+      if (photo.feedback === type) {
+        photo.feedback = null;
+        state.feedbackCount = Math.max(0, state.feedbackCount - 1);
+        toast("已撤销这条反馈");
+      } else {
+        if (!photo.feedback) state.feedbackCount += 1;
+        photo.feedback = type;
+        toast(type === "relevant" ? "已记录：结果有帮助" : "已记录：同类结果将降权");
+      }
+      renderPhotos();
+      if (document.getElementById("explanationModal").classList.contains("is-open")) {
+        closeModal("explanationModal");
+      }
+    }
+
+    function resetUpload() {
+      document.getElementById("uploadInitial").style.display = "";
+      document.getElementById("extractProgress").classList.remove("is-visible");
+      document.getElementById("uploadPreview").classList.remove("is-visible");
+      document.getElementById("uploadRights").checked = false;
+      document.getElementById("uploadImage").removeAttribute("src");
+      document.getElementById("photoFile").value = "";
+      document.getElementById("startExtraction").disabled = false;
+      document.getElementById("startExtraction").textContent = "提取特征并检索";
+      document.querySelectorAll(".extract-step").forEach(step => {
+        step.className = "extract-step";
+      });
+    }
+
+    function setExtractionStep(index, className) {
+      const step = document.querySelector(`[data-step="${["face", "embedding", "search"][index]}"]`);
+      if (!step) return;
+      step.className = "extract-step " + className;
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => window.setTimeout(resolve, ms));
+    }
+
+    async function startExtraction() {
+      if (!document.getElementById("uploadRights").checked) {
+        toast("请先确认你拥有照片的合法使用权");
+        document.getElementById("uploadRights").focus();
+        return;
+      }
+      const button = document.getElementById("startExtraction");
+      button.disabled = true;
+      button.textContent = "正在检索...";
+      document.getElementById("uploadInitial").style.display = "none";
+      document.getElementById("extractProgress").classList.add("is-visible");
+      for (let index = 0; index < 3; index += 1) {
+        setExtractionStep(index, "is-running");
+        await sleep(520);
+        setExtractionStep(index, "is-done");
+      }
+      await sleep(260);
+      closeModal("uploadModal");
+      button.disabled = false;
+      button.textContent = "提取特征并检索";
+      toast("检索完成：已结合人脸、衣着和场景重排结果");
+    }
+
+    document.addEventListener("click", event => {
+      const openButton = event.target.closest("[data-open]");
+      if (openButton) {
+        const target = openButton.dataset.open;
+        if (target === "privacy") closeAllModals();
+        openModal(target === "withdraw" ? "withdrawModal" : target === "privacy" ? "privacyModal" : target === "upload" ? "uploadModal" : target === "guide" ? "guideModal" : target === "evaluation" ? "evaluationModal" : target);
+        return;
+      }
+
+      const closeButton = event.target.closest("[data-close]");
+      if (closeButton) {
+        const modal = closeButton.closest(".modal-backdrop");
+        if (modal) closeModal(modal.id);
+        return;
+      }
+
+      const navButton = event.target.closest("[data-nav]");
+      if (navButton) {
+        handleNav(navButton.dataset.nav);
+        return;
+      }
+
+      const sortButton = event.target.closest("[data-sort]");
+      if (sortButton) {
+        state.sort = sortButton.dataset.sort;
+        document.querySelectorAll("[data-sort]").forEach(item => {
+          item.classList.toggle("is-active", item.dataset.sort === state.sort);
+        });
+        renderPhotos();
+        toast(`已切换为${sortLabel(state.sort)}排序`);
+        return;
+      }
+
+      const requestButton = event.target.closest("[data-request-action]");
+      if (requestButton) {
+        handleOwnerRequest(requestButton);
+        return;
+      }
+
+      const actionButton = event.target.closest("[data-action]");
+      if (actionButton) {
+        const id = actionButton.dataset.id;
+        const action = actionButton.dataset.action;
+        if (action === "save") {
+          const photo = photos.find(item => item.id === id);
+          if (photo) {
+            photo.saved = !photo.saved;
+            renderPhotos();
+            toast(photo.saved ? "已收藏，仅你的账户可见" : "已取消收藏");
+          }
+        }
+        if (action === "explain") openExplanation(id);
+        if (action === "feedback") setFeedback(id, actionButton.dataset.feedback);
+      }
+    });
+
+    document.getElementById("consentCheckbox").addEventListener("change", event => {
+      document.getElementById("acceptConsent").disabled = !event.target.checked;
+    });
+
+    document.getElementById("acceptConsent").addEventListener("click", () => {
+      state.consented = true;
+      closeModal("consentGate");
+      toast("授权已生效，仅限当前演示会话");
+    });
+
+    document.getElementById("declineConsent").addEventListener("click", () => {
+      closeModal("consentGate");
+      document.getElementById("blockedScreen").classList.add("is-visible");
+    });
+
+    document.getElementById("restoreDemo").addEventListener("click", () => {
+      document.getElementById("blockedScreen").classList.remove("is-visible");
+      document.getElementById("consentCheckbox").checked = false;
+      document.getElementById("acceptConsent").disabled = true;
+      openModal("consentGate");
+    });
+
+    document.getElementById("diversityToggle").addEventListener("click", event => {
+      state.diversity = !state.diversity;
+      event.currentTarget.setAttribute("aria-pressed", String(state.diversity));
+      renderPhotos();
+      toast(state.diversity ? "已增加相册和场景多样性" : "已关闭多样性重排");
+    });
+
+    document.getElementById("semanticForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const value = semanticInput.value.trim();
+      if (!value) {
+        toast("请输入一句场景或衣着描述");
+        semanticInput.focus();
+        return;
+      }
+      state.query = value;
+      queryBannerText.textContent = `已结合描述：“${value}”重排结果`;
+      queryBanner.classList.add("is-visible");
+      renderPhotos();
+      toast("多模态语义描述已加入排序");
+    });
+
+    document.getElementById("clearQuery").addEventListener("click", () => {
+      state.query = "";
+      semanticInput.value = "";
+      queryBanner.classList.remove("is-visible");
+      renderPhotos();
+      toast("已清除补充描述");
+    });
+
+    const uploadZone = document.getElementById("uploadZone");
+    const photoFile = document.getElementById("photoFile");
+    photoFile.addEventListener("change", event => {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        toast("请选择图片文件");
+        return;
+      }
+      const reader = new FileReader();
+      reader.addEventListener("load", () => {
+        document.getElementById("uploadImage").src = reader.result;
+        document.getElementById("uploadPreview").classList.add("is-visible");
+      });
+      reader.readAsDataURL(file);
+    });
+    ["dragenter", "dragover"].forEach(type => {
+      uploadZone.addEventListener(type, event => {
+        event.preventDefault();
+        uploadZone.classList.add("is-over");
+      });
+    });
+    uploadZone.addEventListener("dragleave", event => {
+      event.preventDefault();
+      uploadZone.classList.remove("is-over");
+    });
+    uploadZone.addEventListener("drop", event => {
+      event.preventDefault();
+      uploadZone.classList.remove("is-over");
+      const file = event.dataTransfer.files && event.dataTransfer.files[0];
+      if (!file || !file.type.startsWith("image/")) {
+        toast("请拖入一张图片文件");
+        return;
+      }
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      photoFile.files = transfer.files;
+      photoFile.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    document.getElementById("startExtraction").addEventListener("click", startExtraction);
+
+    document.querySelectorAll(".mini-toggle").forEach(toggle => {
+      toggle.addEventListener("click", () => {
+        const next = toggle.getAttribute("aria-pressed") !== "true";
+        toggle.setAttribute("aria-pressed", String(next));
+        toast(next ? "相册授权已开启" : "相册授权已关闭，不再参与新检索");
+      });
+    });
+
+    document.getElementById("confirmWithdraw").addEventListener("click", () => {
+      state.consented = false;
+      photos.forEach(photo => {
+        photo.saved = false;
+        photo.feedback = null;
+      });
+      state.feedbackCount = 0;
+      closeAllModals();
+      document.getElementById("blockedScreen").classList.add("is-visible");
+      document.getElementById("consent-status").textContent = "授权已撤回";
+      document.getElementById("query-consent-state").textContent = "检索已停止";
+      document.getElementById("query-consent-state").style.color = "var(--red)";
+    });
+
+    document.getElementById("notificationButton").addEventListener("click", () => {
+      toast("索引完成：3 个相册，共 1,248 张照片已就绪");
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") {
+        const openModals = [...document.querySelectorAll(".modal-backdrop.is-open")];
+        if (openModals.length && openModals[openModals.length - 1].id !== "consentGate") {
+          closeModal(openModals[openModals.length - 1].id);
+        }
+      }
+      if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && document.getElementById("uploadModal").classList.contains("is-open")) {
+        startExtraction();
+      }
+    });
+
+    document.querySelectorAll(".modal-backdrop").forEach(backdrop => {
+      backdrop.addEventListener("mousedown", event => {
+        if (event.target === backdrop && backdrop.id !== "consentGate") closeModal(backdrop.id);
+      });
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      renderPhotos();
+    });
+
+    renderPhotos();
+  </script>
+</body>
+</html>
