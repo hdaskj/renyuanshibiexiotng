@@ -1,0 +1,32 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: ai03-photo-backend
+  datasource:
+    url: jdbc:h2:file:./data/ai03;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      encoding: UTF-8
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+  jackson:
+    default-property-inclusion: non_null
+
+app:
+  model-service:
+    base-url: http://localhost:8090
+  cors:
+    allowed-origins: http://localhost:8080,http://127.0.0.1:8080
+
+logging:
+  level:
+    root: INFO
+    com.se2026.ai03: INFO

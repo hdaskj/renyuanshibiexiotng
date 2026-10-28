@@ -47,6 +47,7 @@ target/
 *.zip
 logs/
 *.log
+backend/data/
 
 # React / Node
 node_modules/

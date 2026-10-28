@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>相寻 · API 联调台</title>
+  <style>
+    :root{--ink:#17342f;--paper:#f3f0e9;--surface:#fffdf8;--line:#d9d2c5;--muted:#756f65;--green:#2f7663;--orange:#d87942;--red:#b94d4d}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:"DengXian","Microsoft YaHei",sans-serif;font-size:14px}
+    .shell{max-width:1240px;margin:auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}
+    .brand{font-size:24px;font-weight:700;letter-spacing:.08em}.muted{color:var(--muted)}.badge{padding:6px 10px;border-radius:999px;background:#e7f1ec;color:var(--green);font-size:12px}
+    .grid{display:grid;grid-template-columns:280px 1fr;gap:18px}.panel{padding:18px;border:1px solid var(--line);border-radius:16px;background:var(--surface);box-shadow:0 8px 24px rgba(31,54,47,.06)}
+    h1,h2,h3{font-weight:650}h1{font-size:30px;margin:0 0 8px}h2{font-size:20px;margin:0 0 12px}h3{font-size:14px;margin:0 0 8px}
+    label{display:block;color:var(--muted);font-size:12px;margin:12px 0 5px}input,select,button{font:inherit}input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff}
+    button{border:0;border-radius:9px;padding:10px 12px;background:var(--ink);color:#fff;font-weight:650;cursor:pointer}button.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}button.danger{background:var(--red)}button:disabled{opacity:.5;cursor:not-allowed}
+    .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.stack{display:grid;gap:10px}.hidden{display:none!important}.status{margin-top:12px;padding:10px;border-radius:9px;background:#edf5f1;color:var(--green);font-size:12px;white-space:pre-wrap}
+    .results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}.card{border:1px solid var(--line);border-radius:13px;padding:12px;background:#fff}
+    .score{font-size:24px;font-weight:700}.reason{color:var(--muted);font-size:12px;line-height:1.55;min-height:56px}.factors{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.factor{padding-top:5px;border-top:2px solid #d9d2c5;font-size:11px}
+    .factor:nth-child(1){border-color:#74a995}.factor:nth-child(2){border-color:#d4a477}.factor:nth-child(3){border-color:#a6a2b8}
+    .request{padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:#faf7f1}.request b{display:block;margin-bottom:4px}.request small{color:var(--muted)}
+    .tabs{display:flex;gap:7px;margin-bottom:14px}.tabs button.active{background:var(--orange)}.audit{display:grid;gap:6px;max-height:320px;overflow:auto}.audit div{padding:8px;border-left:2px solid var(--green);background:#faf7f1;font-size:12px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}.results{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.results{grid-template-columns:1fr}.shell{padding:14px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="top">
+      <div><div class="brand">相寻 · API 联调台</div><div class="muted">真实后端 / 模型服务 / 授权审批 / 可撤回检索</div></div>
+      <span class="badge" id="connection">尚未登录</span>
+    </div>
+    <div class="grid">
+      <aside class="panel">
+        <h2>开发登录</h2>
+        <p class="muted">角色分离用于验证真实审批流程。参与者创建申请，所有者批准后返回参与者检索。</p>
+        <label for="userSelect">开发账户</label>
+        <select id="userSelect"><option value="participant">林岚 · 参与者</option><option value="owner">林澜 · 相册所有者</option><option value="admin">系统管理员</option></select>
+        <div class="row" style="margin-top:10px"><button id="login">登录</button><button class="secondary" id="health">检查服务</button></div>
+        <div class="status" id="loginStatus">等待操作</div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+        <h3>账号说明</h3>
+        <div class="muted" style="font-size:12px;line-height:1.7">这是开发期的不透明会话令牌，生产环境应替换为 Spring Security + OIDC/JWT。令牌仅保存在当前页面内存。</div>
+      </aside>
+      <section class="panel">
+        <div class="tabs">
+          <button class="active" data-tab="participant">参与者检索</button>
+          <button data-tab="owner">所有者审批</button>
+          <button data-tab="audit">审计与实验</button>
+        </div>
+
+        <div id="participantTab">
+          <h2>本人照片检索</h2>
+          <div class="grid" style="grid-template-columns:1fr 1fr">
+            <div>
+              <label for="albumId">授权相册</label>
+              <select id="albumId"><option value="album-cabin">山间木屋生日会</option><option value="album-camping">春日露营</option><option value="album-city">城市漫步</option></select>
+              <label for="requestId">检索申请编号</label>
+              <input id="requestId" value="request-seed-pending" placeholder="先由所有者审批的申请编号">
+              <div class="row" style="margin-top:10px"><button id="createRequest">提交申请</button><button class="secondary" id="loadConsent">读取申请状态</button></div>
+            </div>
+            <div>
+              <label for="queryText">自然语言补充</label>
+              <input id="queryText" value="穿蓝色针织衫，在木屋咖啡馆">
+              <label for="sample">检索样本</label>
+              <input id="sample" type="file" accept="image/*">
+              <div class="row" style="margin-top:10px">
+                <select id="sort" style="max-width:130px"><option value="OVERALL">综合</option><option value="FACE">人脸</option><option value="OUTFIT">衣着</option><option value="SCENE">场景</option></select>
+                <label style="margin:0;display:flex;align-items:center;gap:6px"><input id="diversity" type="checkbox" checked style="width:auto">增加多样性</label>
+              </div>
+              <div class="row" style="margin-top:10px"><button id="search" disabled>开始检索</button><button class="danger" id="revoke" disabled>撤回授权</button></div>
+            </div>
+          </div>
+          <div class="status" id="participantStatus">需先由相册所有者批准检索申请。</div>
+          <div class="results" id="results"></div>
+        </div>
+
+        <div id="ownerTab" class="hidden">
+          <h2>待审批申请</h2>
+          <div class="row" style="margin-bottom:10px"><select id="ownerAlbum" style="max-width:260px"><option value="album-cabin">山间木屋生日会</option><option value="album-camping">春日露营</option><option value="album-city">城市漫步</option></select><button id="loadRequests">刷新申请</button></div>
+          <div id="requestList" class="status">以相册所有者身份登录后刷新。</div>
+        </div>
+
+        <div id="auditTab" class="hidden">
+          <h2>审计与实验</h2>
+          <div class="row"><button id="loadAudit">刷新审计</button><button class="secondary" id="loadExperiments">读取实验摘要</button></div>
+          <div id="auditList" class="audit" style="margin-top:12px"></div>
+          <div id="experimentSummary" class="status"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const API = 'http://localhost:8081/api/v1';
+    const state = { token: '', user: null, request: null, consentId: '', sessionId: '', results: [] };
+    const $ = id => document.getElementById(id);
+    const show = (id, text) => { $(id).textContent = text; };
+    const headers = () => ({ 'Authorization': 'Bearer ' + state.token, 'Content-Type': 'application/json' });
+    async function request(path, options = {}) {
+      const response = await fetch(API + path, options);
+      const text = await response.text();
+      let body = text ? JSON.parse(text) : null;
+      if (!response.ok) throw new Error(body?.message || body?.error || response.statusText);
+      return body;
+    }
+    async function checkHealth() {
+      try {
+        const r = await fetch(API + '/health');
+        const body = await r.json();
+        show('connection', body.status === 'UP' ? '后端已连接' : body.status);
+      } catch { show('connection', '后端未连接'); }
+    }
+    $('health').onclick = checkHealth;
+    $('login').onclick = async () => {
+      try {
+        const body = await request('/auth/dev-login', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({username:$('userSelect').value}) });
+        state.token = body.token; state.user = body.user;
+        show('loginStatus', `已登录：${body.user.displayName} (${body.user.role})`);
+        show('connection', `${body.user.displayName} · ${body.user.role}`);
+        $('search').disabled = body.user.role !== 'PARTICIPANT';
+        $('revoke').disabled = body.user.role !== 'PARTICIPANT';
+        if (body.user.role === 'OWNER' || body.user.role === 'ADMIN') switchTab('owner');
+      } catch (error) { show('loginStatus', '登录失败：' + error.message); }
+    };
+    document.querySelectorAll('[data-tab]').forEach(button => button.onclick = () => switchTab(button.dataset.tab));
+    function switchTab(tab) {
+      document.querySelectorAll('[data-tab]').forEach(button => button.classList.toggle('active', button.dataset.tab === tab));
+      $('participantTab').classList.toggle('hidden', tab !== 'participant');
+      $('ownerTab').classList.toggle('hidden', tab !== 'owner');
+      $('auditTab').classList.toggle('hidden', tab !== 'audit');
+    }
+    $('createRequest').onclick = async () => {
+      try {
+        const body = await request('/search-requests', { method:'POST', headers:headers(), body:JSON.stringify({albumId:$('albumId').value,requestedDays:7}) });
+        state.request = body;
+        $('requestId').value = body.id;
+        show('participantStatus', `申请已创建：${body.id}\n请切换为相册所有者登录并批准。`);
+      } catch (error) { show('participantStatus', '创建失败：' + error.message); }
+    };
+    $('loadConsent').onclick = async () => {
+      try {
+        const list = await request('/search-requests?albumId=' + encodeURIComponent($('albumId').value), { headers:{'Authorization':'Bearer '+state.token} });
+        const own = list.find(item => item.requesterId === state.user?.id);
+        if (!own) throw new Error('当前账号没有可读取的申请');
+        state.request = own; state.consentId = own.consentId || '';
+        $('requestId').value = own.id;
+        show('participantStatus', `申请 ${own.status}${own.consentId ? '\n授权编号：' + own.consentId : ''}`);
+      } catch (error) { show('participantStatus', '读取失败：' + error.message); }
+    };
+    $('search').onclick = async () => {
+      try {
+        const file = $('sample').files[0];
+        if (!file) throw new Error('请选择一张图片样本');
+        const form = new FormData();
+        form.append('sample', file);
+        form.append('requestId', $('requestId').value);
+        form.append('queryText', $('queryText').value);
+        form.append('sort', $('sort').value);
+        form.append('diversity', String($('diversity').checked));
+        show('participantStatus', '正在调用模型服务并执行授权内检索...');
+        const body = await request('/search-sessions', { method:'POST', headers:{'Authorization':'Bearer '+state.token}, body:form });
+        state.sessionId = body.id; state.results = body.items || [];
+        show('participantStatus', `检索完成 · ${body.modelVersion} · ${body.items.length} 条结果`);
+        renderResults();
+        $('revoke').disabled = !body.consentVersion;
+        state.consentId = body.consentVersion || state.consentId;
+      } catch (error) { show('participantStatus', '检索失败：' + error.message); }
+    };
+    function renderResults() {
+      $('results').innerHTML = state.results.map(item => `
+        <article class="card">
+          <div class="row" style="justify-content:space-between"><strong>${escapeHtml(item.title)}</strong><span class="score">${item.score}</span></div>
+          <div class="muted" style="font-size:11px;margin:3px 0 8px">${escapeHtml(item.albumName)} · ${escapeHtml(item.date)}</div>
+          <div class="reason">${escapeHtml(item.summary)}</div>
+          <div class="factors"><span class="factor">人脸 ${item.factors.face}</span><span class="factor">衣着 ${item.factors.outfit}</span><span class="factor">场景 ${item.factors.scene}</span></div>
+          <div class="row" style="margin-top:10px"><button class="secondary" onclick="sendFeedback('${item.photoId}','RELEVANT',this)">相关</button><button class="secondary" onclick="sendFeedback('${item.photoId}','IRRELEVANT',this)">不相关</button></div>
+          <div class="muted" style="font-size:10px;margin-top:8px">${escapeHtml(item.identityDisclaimer)}</div>
+        </article>`).join('');
+    }
+    window.sendFeedback = async (photoId, relevance, button) => {
+      try {
+        await request('/feedback', { method:'POST', headers:headers(), body:JSON.stringify({sessionId:state.sessionId,resultId:photoId,relevance}) });
+        button.textContent = relevance === 'RELEVANT' ? '已反馈相关' : '已反馈不相关';
+        button.disabled = true;
+      } catch (error) { show('participantStatus', '反馈失败：' + error.message); }
+    };
+    $('revoke').onclick = async () => {
+      if (!state.consentId) return show('participantStatus', '当前没有可撤回的授权');
+      try {
+        const body = await request('/consents/' + encodeURIComponent(state.consentId), { method:'DELETE', headers:{'Authorization':'Bearer '+state.token} });
+        show('participantStatus', `授权已撤回；${body.status}；清理任务 ${body.cleanupJobId}`);
+        $('search').disabled = true; $('revoke').disabled = true; $('results').innerHTML = '';
+      } catch (error) { show('participantStatus', '撤回失败：' + error.message); }
+    };
+    $('loadRequests').onclick = async () => {
+      try {
+        const list = await request('/search-requests?albumId=' + encodeURIComponent($('ownerAlbum').value), { headers:{'Authorization':'Bearer '+state.token} });
+        $('requestList').innerHTML = list.length ? list.map(item => `
+          <div class="request"><b>${item.id}</b><small>申请人 ${item.requesterId} · ${item.status} · ${item.requestedDays} 天</small>
+          ${item.status === 'REQUESTED' ? `<div class="row" style="margin-top:8px"><button onclick="decide('${item.id}','APPROVE',this)">同意 7 天</button><button class="secondary" onclick="decide('${item.id}','REJECT',this)">拒绝</button></div>` : ''}</div>`).join('') : '暂无申请';
+      } catch (error) { $('requestList').textContent = '读取失败：' + error.message; }
+    };
+    window.decide = async (id, decision, button) => {
+      try {
+        const item = await request('/search-requests/' + encodeURIComponent(id), { method:'PATCH', headers:headers(), body:JSON.stringify({decision,approvedDays:7}) });
+        button.closest('.request').insertAdjacentHTML('beforeend', `<div class="status">${item.status}${item.consentId ? ' · ' + item.consentId : ''}</div>`);
+        button.parentElement.remove();
+      } catch (error) { alert('审批失败：' + error.message); }
+    };
+    $('loadAudit').onclick = async () => {
+      try {
+        const list = await request('/audit-events?albumId=' + encodeURIComponent($('ownerAlbum').value), { headers:{'Authorization':'Bearer '+state.token} });
+        $('auditList').innerHTML = list.map(item => `<div><b>${escapeHtml(item.action)}</b><br>${escapeHtml(item.resourceType)} · ${escapeHtml(item.resourceId || '')}<br>${escapeHtml(item.occurredAt)}</div>`).join('');
+      } catch (error) { $('auditList').textContent = '读取失败：' + error.message; }
+    };
+    $('loadExperiments').onclick = async () => {
+      try {
+        const rows = await request('/experiments/summary', { headers:{'Authorization':'Bearer '+state.token} });
+        $('experimentSummary').textContent = rows.map(row => `${row.key} · ${row.rolloutPercent}% · Top-K ${Math.round(row.topKRecall*1000)/10}% · NDCG ${row.ndcgAt10} · P95 ${row.p95LatencyMs}ms`).join('\n');
+      } catch (error) { $('experimentSummary').textContent = '读取失败：' + error.message; }
+    };
+    function escapeHtml(value) { return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch])); }
+    checkHealth();
+  </script>
+</body>
+</html>

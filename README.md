@@ -2,13 +2,15 @@
 
 > 项目编号：SE2026-AI-03
 >
-> 当前阶段：交互原型与系统设计
+> 当前阶段：交互原型、系统设计与可运行端到端 MVP
 
 相寻是一个面向**已授权私人相册**的照片发现系统。用户可以上传一张检索样本并补充衣着、场景等自然语言描述，系统结合人脸、人体、衣着和场景特征返回可能与其本人有关的照片，并展示推荐依据。
 
 项目严格限制使用场景：不提供公共场所找人、陌生人检索、真实身份核验、批量导出或监控能力。
 
 ![交互原型预览](frontend/prototype/prototype-preview.png)
+
+![真实 API 联调页面](frontend/mvp/preview.png)
 
 ## 当前完成内容
 
@@ -22,6 +24,9 @@
 - 撤回授权、停止检索和索引清理状态。
 - 桌面端和移动端响应式布局。
 - 系统架构、授权状态机、OpenAPI 接口和 PostgreSQL 数据模型。
+- Spring Boot 授权与检索编排后端。
+- Python 多模态特征服务（当前为可替换的确定性特征桩）。
+- 真实 API 联调页面、反馈记录、审计和撤回阻断。
 
 ## 快速体验
 
@@ -56,6 +61,65 @@ python -m http.server 8080 --directory frontend/prototype
 6. 进入“相册协作”，审批检索申请并查看审计日志。
 7. 进入“授权与隐私”，演示撤回授权和索引清理。
 
+## 启动可运行 MVP
+
+当前 MVP 使用 H2 文件数据库和本地向量索引适配器，以便先验证完整业务链路。正式版本再替换为 PostgreSQL 与 Milvus/Faiss。
+
+环境要求：
+
+- JDK 17
+- Maven 3.9+
+- Python 3.10+
+
+### 1. 启动模型服务
+
+```bash
+cd model_service
+python app.py
+```
+
+服务地址：`http://localhost:8090`
+
+### 2. 启动后端
+
+```bash
+cd backend
+mvn spring-boot:run
+```
+
+服务地址：`http://localhost:8081`
+
+### 3. 启动 API 联调页面
+
+```bash
+cd frontend/mvp
+python -m http.server 8080 --bind 127.0.0.1
+```
+
+访问 `http://127.0.0.1:8080/`，使用以下开发账户：
+
+- `participant`：林岚，参与者。
+- `owner`：林澜，相册所有者。
+- `admin`：系统管理员。
+
+### Docker Compose
+
+```bash
+docker compose up --build
+```
+
+访问 `http://localhost:8080/`。
+
+### 冒烟测试
+
+模型服务和后端启动后：
+
+```bash
+python scripts/e2e_smoke.py
+```
+
+测试覆盖申请、审批、样本上传、特征调用、授权内召回、反馈、审计和撤回。
+
 ## 工程文档
 
 - [文档索引](docs/README.md)
@@ -70,7 +134,12 @@ python -m http.server 8080 --directory frontend/prototype
 ```text
 .
 ├── frontend/
-│   └── prototype/              # 当前可运行的交互原型
+│   ├── mvp/                    # 真实 API 联调页面
+│   └── prototype/              # 高保真交互原型
+├── backend/                    # Spring Boot 后端
+├── model_service/              # Python 特征服务
+├── scripts/                    # E2E 冒烟测试
+├── vector_store/               # 后续向量库适配
 ├── docs/
 │   ├── api/                    # OpenAPI 接口契约
 │   ├── db/                     # PostgreSQL 数据模型
@@ -81,7 +150,7 @@ python -m http.server 8080 --directory frontend/prototype
 └── README.md
 ```
 
-规划中的 `backend/`、`model_service/`、`vector_store/` 和 `scripts/` 将在老师确认需求边界后逐步加入。
+当前 `backend/` 已实现授权、审批、检索编排、反馈、审计与撤回；`model_service/` 是可运行的特征服务桩。Milvus/Faiss、真实 InsightFace/CLIP/LLaVA、React 工程化版本和 PostgreSQL 切换仍待后续完成。
 
 ## 技术路线
 
@@ -112,4 +181,4 @@ python -m http.server 8080 --directory frontend/prototype
 
 ## 当前限制
 
-当前仓库中的原型用于验证交互和业务闭环。CLIP/InsightFace 推理、Milvus/Faiss、Spring Boot 后端、React 工程化版本、灰度发布和生产级监控尚未接入；原型中的分值和响应时间均为演示数据，不代表真实模型结果。
+当前 MVP 已经打通真实前后端与模型服务调用，但模型仍为确定性特征桩，向量召回使用进程内适配器。CLIP/InsightFace/LLaVA 真实推理、Milvus/Faiss、React 工程化版本、PostgreSQL、灰度发布与生产监控仍待接入；演示分值和响应时间不代表真实模型效果。
