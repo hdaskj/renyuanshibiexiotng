@@ -7,10 +7,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 
 import com.se2026.ai03.model.ModelClient.ModelFeatures;
 
 @Component
+@Profile("!milvus")
 public class LocalVectorIndex implements VectorIndex {
     private record Candidate(
             String id,

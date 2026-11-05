@@ -2,7 +2,7 @@
 
 > 项目编号：SE2026-AI-03
 >
-> 当前阶段：交互原型、系统设计与可运行端到端 MVP
+> 当前阶段：V0.2 正式 React 客户端与可运行端到端 MVP
 
 相寻是一个面向**已授权私人相册**的照片发现系统。用户可以上传一张检索样本并补充衣着、场景等自然语言描述，系统结合人脸、人体、衣着和场景特征返回可能与其本人有关的照片，并展示推荐依据。
 
@@ -26,7 +26,9 @@
 - 系统架构、授权状态机、OpenAPI 接口和 PostgreSQL 数据模型。
 - Spring Boot 授权与检索编排后端。
 - Python 多模态特征服务（当前为可替换的确定性特征桩）。
-- 真实 API 联调页面、反馈记录、审计和撤回阻断。
+- React + TypeScript 正式客户端，覆盖参与者、所有者和审计三个业务域。
+- PostgreSQL/Flyway 生产配置与 Milvus 可切换向量索引适配器。
+- 真实 API 联调、反馈记录、审计和撤回阻断。
 
 ## 快速体验
 
@@ -89,14 +91,28 @@ mvn spring-boot:run
 
 服务地址：`http://localhost:8081`
 
-### 3. 启动 API 联调页面
+### 3. 启动 React 客户端
+
+环境要求：Node.js 22+、pnpm 11+。
 
 ```bash
-cd frontend/mvp
-python -m http.server 8080 --bind 127.0.0.1
+cd frontend/app
+pnpm install
+pnpm dev
 ```
 
-访问 `http://127.0.0.1:8080/`，使用以下开发账户：
+开发地址：`http://127.0.0.1:5173/`
+
+生产构建可运行：
+
+```bash
+pnpm build
+pnpm preview
+```
+
+预览地址：`http://127.0.0.1:4173/`
+
+使用以下开发账户：
 
 - `participant`：林岚，参与者。
 - `owner`：林澜，相册所有者。
@@ -109,6 +125,34 @@ docker compose up --build
 ```
 
 访问 `http://localhost:8080/`。
+
+### PostgreSQL 与 Milvus
+
+默认配置使用 H2 和本地向量索引适配器，不依赖外部服务。
+
+启用 PostgreSQL：
+
+```bash
+cd backend
+SPRING_PROFILES_ACTIVE=postgres \
+DB_URL=jdbc:postgresql://localhost:5432/ai03 \
+DB_USER=ai03 DB_PASSWORD=ai03 \
+mvn spring-boot:run
+```
+
+PostgreSQL 表结构与种子数据由 Flyway 自动执行，迁移文件位于 `backend/src/main/resources/db/migration-postgres/`。
+
+启用 Milvus：
+
+```bash
+python vector_store/init_milvus.py
+cd backend
+SPRING_PROFILES_ACTIVE=postgres,milvus \
+MILVUS_URL=http://127.0.0.1:19530 \
+mvn spring-boot:run
+```
+
+Milvus 不可用且 `MILVUS_FAIL_OPEN=false` 时，检索明确返回 `VECTOR_STORE_UNAVAILABLE`，不会静默越过生产依赖。
 
 ### 冒烟测试
 
@@ -135,11 +179,12 @@ python scripts/e2e_smoke.py
 .
 ├── frontend/
 │   ├── mvp/                    # 真实 API 联调页面
+│   ├── app/                    # React + TypeScript 正式客户端
 │   └── prototype/              # 高保真交互原型
 ├── backend/                    # Spring Boot 后端
 ├── model_service/              # Python 特征服务
 ├── scripts/                    # E2E 冒烟测试
-├── vector_store/               # 后续向量库适配
+├── vector_store/               # Milvus 初始化和适配说明
 ├── docs/
 │   ├── api/                    # OpenAPI 接口契约
 │   ├── db/                     # PostgreSQL 数据模型
@@ -150,7 +195,7 @@ python scripts/e2e_smoke.py
 └── README.md
 ```
 
-当前 `backend/` 已实现授权、审批、检索编排、反馈、审计与撤回；`model_service/` 是可运行的特征服务桩。Milvus/Faiss、真实 InsightFace/CLIP/LLaVA、React 工程化版本和 PostgreSQL 切换仍待后续完成。
+当前 `backend/` 已实现授权、审批、检索编排、反馈、审计与撤回，并提供 PostgreSQL、Flyway 和 Milvus 适配入口；`frontend/app/` 是正式 React 客户端；`model_service/` 仍是可运行的特征服务桩。真实 InsightFace/CLIP/LLaVA 推理和完整 Milvus 数据管道仍待后续完成。
 
 ## 技术路线
 
@@ -181,4 +226,4 @@ python scripts/e2e_smoke.py
 
 ## 当前限制
 
-当前 MVP 已经打通真实前后端与模型服务调用，但模型仍为确定性特征桩，向量召回使用进程内适配器。CLIP/InsightFace/LLaVA 真实推理、Milvus/Faiss、React 工程化版本、PostgreSQL、灰度发布与生产监控仍待接入；演示分值和响应时间不代表真实模型效果。
+当前 V0.2 已经打通 React 客户端、真实后端、模型服务和授权闭环，并具备 PostgreSQL/Milvus 配置入口。默认演示仍使用 H2、进程内向量索引和确定性特征桩；真实 InsightFace/CLIP/LLaVA 推理、真实向量数据管道、灰度发布与生产监控仍需继续接入。

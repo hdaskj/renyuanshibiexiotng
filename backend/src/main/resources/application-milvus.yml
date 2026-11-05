@@ -1,0 +1,7 @@
+app:
+  vector-store:
+    provider: milvus
+    milvus:
+      base-url: ${MILVUS_URL:http://localhost:19530}
+      collection: ${MILVUS_COLLECTION:ai03_photos}
+      fail-open: ${MILVUS_FAIL_OPEN:false}

@@ -16,6 +16,7 @@
 - [交互原型](../frontend/prototype/index.html)
 - [原型使用说明](../frontend/prototype/README.md)
 - [真实 API 联调页面](../frontend/mvp/index.html)
+- [React + TypeScript 正式客户端](../frontend/app/index.html)
 - [端到端冒烟测试](../scripts/e2e_smoke.py)
 
 ## 当前状态
