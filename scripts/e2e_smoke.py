@@ -1,6 +1,7 @@
 import json
 import mimetypes
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -107,7 +108,7 @@ def main():
         "POST",
         {
             "sessionId": search["id"],
-            "resultId": search["items"][0]["photoId"],
+            "resultId": search["items"][0]["resultId"],
             "relevance": "RELEVANT",
         },
         participant_token,
@@ -127,6 +128,18 @@ def main():
         f"/consents/{approved['consentId']}", "DELETE", token=participant_token
     )
     assert revoked["status"] == "CLEANUP_PENDING"
+    _, cleanup = json_request(
+        f"/deletion-jobs/{revoked['cleanupJobId']}", token=participant_token
+    )
+    assert cleanup["status"] in ("PENDING", "RUNNING", "COMPLETED")
+    for _ in range(10):
+        if cleanup["status"] == "COMPLETED":
+            break
+        time.sleep(0.4)
+        _, cleanup = json_request(
+            f"/deletion-jobs/{revoked['cleanupJobId']}", token=participant_token
+        )
+    assert cleanup["status"] in ("PENDING", "COMPLETED")
 
     try:
         json_request(
@@ -147,6 +160,7 @@ def main():
                 "topResult": search["items"][0]["title"],
                 "auditActions": sorted(actions),
                 "revokeStatus": revoked["status"],
+                "cleanupStatus": cleanup["status"],
             },
             ensure_ascii=False,
             indent=2,

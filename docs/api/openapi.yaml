@@ -236,6 +236,28 @@ paths:
                   requestId: { type: string, format: uuid }
         "409":
           description: 授权已经撤回
+  /deletion-jobs/{jobId}:
+    get:
+      tags: [Consent]
+      summary: 查询撤回授权后的派生数据清理状态
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: 清理任务状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionJob"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: 清理任务不存在
   /audit-events:
     get:
       tags: [Audit]
@@ -348,52 +370,64 @@ components:
         pollAfterMs: { type: integer, minimum: 50 }
     SearchResults:
       type: object
-      required: [sessionId, items, modelVersion, policyVersion, requestId]
+      required: [id, requestId, status, pollAfterMs, modelVersion, consentVersion, items]
       properties:
-        sessionId: { type: string, format: uuid }
+        id: { type: string }
+        requestId: { type: string }
+        status:
+          type: string
+          enum: [QUEUED, EXTRACTING, SEARCHING, COMPLETED, FAILED, EXPIRED, REVOKED]
+        pollAfterMs: { type: integer, minimum: 0 }
         modelVersion: { type: string }
-        policyVersion: { type: string }
-        requestId: { type: string, format: uuid }
+        consentVersion: { type: string }
         items:
           type: array
           items:
             $ref: "#/components/schemas/SearchResult"
     SearchResult:
       type: object
-      required: [id, photoId, title, score, factors, explanation, albumId]
+      required: [resultId, photoId, title, score, factors, summary, identityDisclaimer, albumId]
       properties:
-        id: { type: string, format: uuid }
-        photoId: { type: string, format: uuid }
-        albumId: { type: string, format: uuid }
+        resultId: { type: string }
+        photoId: { type: string }
+        albumId: { type: string }
         title: { type: string }
-        score: { type: number, minimum: 0, maximum: 1 }
+        score: { type: integer, minimum: 0, maximum: 100 }
         factors:
           type: object
           required: [face, outfit, scene]
           properties:
-            face: { type: number, minimum: 0, maximum: 1 }
-            outfit: { type: number, minimum: 0, maximum: 1 }
-            scene: { type: number, minimum: 0, maximum: 1 }
-        explanation:
-          type: object
-          required: [facts, summary, identityDisclaimer]
-          properties:
-            facts:
-              type: array
-              items: { type: string }
-            summary: { type: string }
-            identityDisclaimer:
-              type: string
-              const: 视觉相似建议，不是身份认定
+            face: { type: integer, minimum: 0, maximum: 100 }
+            outfit: { type: integer, minimum: 0, maximum: 100 }
+            scene: { type: integer, minimum: 0, maximum: 100 }
+        summary: { type: string }
+        identityDisclaimer:
+          type: string
+          const: 视觉相似建议，不是身份认定
         thumbnailUrl:
           type: string
           format: uri
           description: 短时签名 URL，不得作为永久链接
+    DeletionJob:
+      type: object
+      required: [id, consentId, resourceType, resourceId, status, attempts, dueAt]
+      properties:
+        id: { type: string }
+        consentId: { type: string }
+        resourceType: { type: string }
+        resourceId: { type: string }
+        status:
+          type: string
+          enum: [PENDING, RUNNING, COMPLETED, FAILED]
+        attempts: { type: integer, minimum: 0 }
+        lastError: { type: [string, "null"] }
+        dueAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
     AuditEvent:
       type: object
-      required: [id, action, actorId, occurredAt, policyVersion]
+      required: [id, action, resourceType, occurredAt]
       properties:
-        id: { type: string, format: uuid }
+        id: { type: string }
         action:
           type: string
           enum:
@@ -406,12 +440,9 @@ components:
             - FEEDBACK_RECORDED
             - CLEANUP_COMPLETED
             - CLEANUP_FAILED
-        actorId: { type: string, format: uuid }
+        resourceType: { type: string }
+        resourceId: { type: [string, "null"] }
         occurredAt: { type: string, format: date-time }
-        policyVersion: { type: string }
-        metadata:
-          type: object
-          additionalProperties: true
     ExperimentSummary:
       type: object
       required: [key, modelVersion, rolloutPercent, metrics]

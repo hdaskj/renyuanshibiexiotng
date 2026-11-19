@@ -111,6 +111,13 @@ public class AppController {
         return workflow.revokeConsent(user, consentId);
     }
 
+    @GetMapping("/deletion-jobs/{jobId}")
+    public WorkflowService.DeletionJobDto deletionJob(
+            @RequestAttribute(WebConfig.CURRENT_USER_ATTRIBUTE) AuthUser user,
+            @PathVariable("jobId") String jobId) {
+        return workflow.getDeletionJob(user, jobId);
+    }
+
     @GetMapping("/audit-events")
     public List<WorkflowService.AuditEventDto> audit(
             @RequestAttribute(WebConfig.CURRENT_USER_ATTRIBUTE) AuthUser user,

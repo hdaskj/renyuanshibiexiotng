@@ -1,6 +1,7 @@
 import type {
   Album,
   AuditEvent,
+  DeletionJob,
   ExperimentSummary,
   LoginResponse,
   SearchRequest,
@@ -128,6 +129,13 @@ export const api = {
     request<{ consentId: string; status: string; cleanupJobId: string }>(
       `/consents/${encodeURIComponent(consentId)}`,
       { method: "DELETE" },
+      token
+    ),
+
+  deletionJob: (token: string, jobId: string) =>
+    request<DeletionJob>(
+      `/deletion-jobs/${encodeURIComponent(jobId)}`,
+      {},
       token
     ),
 

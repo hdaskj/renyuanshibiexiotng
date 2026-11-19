@@ -35,6 +35,7 @@ export interface SearchRequest {
 }
 
 export interface SearchResult {
+  resultId: string;
   photoId: string;
   title: string;
   albumId: string;
@@ -69,6 +70,18 @@ export interface AuditEvent {
   resourceType: string;
   resourceId?: string;
   occurredAt: string;
+}
+
+export interface DeletionJob {
+  id: string;
+  consentId: string;
+  resourceType: string;
+  resourceId: string;
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  attempts: number;
+  lastError?: string;
+  dueAt: string;
+  completedAt?: string;
 }
 
 export interface ExperimentSummary {

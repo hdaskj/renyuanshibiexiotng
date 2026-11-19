@@ -1,8 +1,10 @@
 package com.se2026.ai03.service;
 
-import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -75,7 +77,7 @@ public class WorkflowService {
                 .param("days", requestedDays)
                 .param("now", now)
                 .update();
-        audit(user.id(), "REQUEST_SUBMITTED", "SEARCH_REQUEST", id, Map.of("albumId", albumId));
+        audit(user.id(), albumId, "REQUEST_SUBMITTED", "SEARCH_REQUEST", id, Map.of("albumId", albumId));
         return getRequest(id);
     }
 
@@ -120,7 +122,7 @@ public class WorkflowService {
                     .param("now", now)
                     .param("id", requestId)
                     .update();
-            audit(user.id(), "REQUEST_REJECTED", "SEARCH_REQUEST", requestId, Map.of());
+            audit(user.id(), request.albumId(), "REQUEST_REJECTED", "SEARCH_REQUEST", requestId, Map.of());
             return getRequest(requestId);
         }
         if (!"APPROVE".equalsIgnoreCase(decision)) {
@@ -161,7 +163,7 @@ public class WorkflowService {
                 .param("now", now)
                 .param("expiresAt", expiresAt)
                 .update();
-        audit(user.id(), "REQUEST_APPROVED", "SEARCH_REQUEST", requestId,
+        audit(user.id(), request.albumId(), "REQUEST_APPROVED", "SEARCH_REQUEST", requestId,
                 Map.of("consentId", consentId, "days", days));
         return getRequest(requestId);
     }
@@ -189,8 +191,11 @@ public class WorkflowService {
         ModelFeatures features = modelClient.extract(sample, contentType, queryText);
         List<ScoredPhoto> photos = vectorIndex.search(
                 features, queryText == null ? "" : queryText, normalizeSort(sortMode), diversity);
-        List<SearchItemDto> items = photos.stream()
-                .map(photo -> new SearchItemDto(
+        List<SearchItemDto> items = new ArrayList<>();
+        int rank = 1;
+        for (ScoredPhoto photo : photos) {
+            items.add(new SearchItemDto(
+                        "result-" + UUID.randomUUID(),
                         photo.photoId(),
                         photo.title(),
                         photo.albumId(),
@@ -201,18 +206,22 @@ public class WorkflowService {
                         photo.overall(),
                         new FactorDto(photo.face(), photo.outfitScore(), photo.sceneScore()),
                         photo.reason(),
-                        "视觉相似建议，不是身份认定"))
-                .toList();
+                        "视觉相似建议，不是身份认定"));
+            rank++;
+        }
         String sessionId = "session-" + UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         try {
             String json = objectMapper.writeValueAsString(items);
             jdbc.sql("""
                     INSERT INTO search_sessions (
                       id, request_id, actor_user_id, sort_mode, diversity_enabled,
-                      query_text, status, model_version, consent_version, results_json, created_at
+                      query_text, status, model_version, consent_version, sample_sha256,
+                      results_json, created_at, completed_at
                     ) VALUES (
                       :id, :requestId, :userId, :sortMode, :diversity,
-                      :queryText, 'COMPLETED', :modelVersion, :consentVersion, :resultsJson, :now
+                      :queryText, 'COMPLETED', :modelVersion, :consentVersion, :sampleSha256,
+                      :resultsJson, :now, :now
                     )
                     """)
                     .param("id", sessionId)
@@ -223,13 +232,48 @@ public class WorkflowService {
                     .param("queryText", queryText == null ? "" : queryText)
                     .param("modelVersion", features.modelVersion())
                     .param("consentVersion", consent.id())
+                    .param("sampleSha256", sha256(sample))
                     .param("resultsJson", json)
-                    .param("now", OffsetDateTime.now(ZoneOffset.UTC))
+                    .param("now", now)
                     .update();
+            int resultRank = 1;
+            for (SearchItemDto item : items) {
+                jdbc.sql("""
+                        INSERT INTO search_results (
+                          id, session_id, photo_id, rank_number, overall_score,
+                          face_score, outfit_score, scene_score, title, album_id,
+                          album_name, scene_label, outfit_label, photo_date, summary,
+                          identity_disclaimer, created_at
+                        ) VALUES (
+                          :id, :sessionId, :photoId, :rank, :overall,
+                          :face, :outfit, :scene, :title, :albumId,
+                          :albumName, :sceneLabel, :outfitLabel, :photoDate, :summary,
+                          :disclaimer, :now
+                        )
+                        """)
+                        .param("id", item.resultId())
+                        .param("sessionId", sessionId)
+                        .param("photoId", item.photoId())
+                        .param("rank", resultRank++)
+                        .param("overall", item.score())
+                        .param("face", item.factors().face())
+                        .param("outfit", item.factors().outfit())
+                        .param("scene", item.factors().scene())
+                        .param("title", item.title())
+                        .param("albumId", item.albumId())
+                        .param("albumName", item.albumName())
+                        .param("sceneLabel", item.scene())
+                        .param("outfitLabel", item.outfit())
+                        .param("photoDate", item.date())
+                        .param("summary", item.summary())
+                        .param("disclaimer", item.identityDisclaimer())
+                        .param("now", now)
+                        .update();
+            }
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Could not serialize search results", exception);
         }
-        audit(user.id(), "SEARCH_COMPLETED", "SEARCH_SESSION", sessionId,
+        audit(user.id(), request.albumId(), "SEARCH_COMPLETED", "SEARCH_SESSION", sessionId,
                 Map.of("requestId", requestId, "modelVersion", features.modelVersion()));
         return new SearchSessionDto(
                 sessionId,
@@ -258,13 +302,39 @@ public class WorkflowService {
             throw new ApiException(HttpStatus.FORBIDDEN, "SESSION_FORBIDDEN", "Search session belongs to another user");
         }
         activeConsent(row.requestId());
+        List<SearchItemDto> normalizedItems = jdbc.sql("""
+                SELECT * FROM search_results WHERE session_id=:sessionId ORDER BY rank_number
+                """)
+                .param("sessionId", sessionId)
+                .query((rs, rowNum) -> new SearchItemDto(
+                        rs.getString("id"),
+                        rs.getString("photo_id"),
+                        rs.getString("title"),
+                        rs.getString("album_id"),
+                        rs.getString("album_name"),
+                        rs.getString("scene_label"),
+                        rs.getString("outfit_label"),
+                        rs.getString("photo_date"),
+                        rs.getInt("overall_score"),
+                        new FactorDto(
+                                rs.getInt("face_score"),
+                                rs.getInt("outfit_score"),
+                                rs.getInt("scene_score")),
+                        rs.getString("summary"),
+                        rs.getString("identity_disclaimer")))
+                .list();
+        if (!normalizedItems.isEmpty()) {
+            return new SearchSessionDto(
+                    row.id(), row.requestId(), row.status(), 0,
+                    row.modelVersion(), row.consentVersion(), normalizedItems);
+        }
         try {
-            List<SearchItemDto> items = objectMapper.readValue(
+            List<SearchItemDto> legacyItems = objectMapper.readValue(
                     row.resultsJson(), new TypeReference<List<SearchItemDto>>() {
                     });
             return new SearchSessionDto(
                     row.id(), row.requestId(), row.status(), 0,
-                    row.modelVersion(), row.consentVersion(), items);
+                    row.modelVersion(), row.consentVersion(), legacyItems);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Stored search results are invalid", exception);
         }
@@ -275,27 +345,51 @@ public class WorkflowService {
         if (!List.of("RELEVANT", "IRRELEVANT", "UNDO").contains(relevance)) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "INVALID_FEEDBACK", "Unsupported feedback value");
         }
-        SessionActor session = jdbc.sql("SELECT actor_user_id FROM search_sessions WHERE id=:id")
+        SessionActor session = jdbc.sql("""
+                SELECT s.actor_user_id, r.album_id
+                FROM search_sessions s
+                JOIN search_requests r ON r.id = s.request_id
+                WHERE s.id=:id
+                """)
                 .param("id", sessionId)
-                .query((rs, rowNum) -> new SessionActor(rs.getString("actor_user_id")))
+                .query((rs, rowNum) -> new SessionActor(
+                        rs.getString("actor_user_id"),
+                        rs.getString("album_id")))
                 .optional()
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SESSION_NOT_FOUND", "Search session not found"));
         if (!session.userId().equals(user.id())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "SESSION_FORBIDDEN", "Search session belongs to another user");
         }
+        int resultCount = jdbc.sql("""
+                SELECT COUNT(*) FROM search_results WHERE id=:resultId AND session_id=:sessionId
+                """)
+                .param("resultId", resultId)
+                .param("sessionId", sessionId)
+                .query(Integer.class)
+                .single();
+        if (resultCount == 0) {
+            throw new ApiException(HttpStatus.NOT_FOUND, "RESULT_NOT_FOUND", "Search result not found");
+        }
         String eventId = "feedback-" + UUID.randomUUID();
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         jdbc.sql("""
-                INSERT INTO feedback_events (id, session_id, result_id, actor_user_id, relevance, created_at)
-                VALUES (:id, :sessionId, :resultId, :userId, :relevance, :now)
+                INSERT INTO feedback_events (
+                  id, session_id, result_id, actor_user_id, relevance,
+                  retention_until, created_at
+                ) VALUES (
+                  :id, :sessionId, :resultId, :userId, :relevance,
+                  :retentionUntil, :now
+                )
                 """)
                 .param("id", eventId)
                 .param("sessionId", sessionId)
                 .param("resultId", resultId)
                 .param("userId", user.id())
                 .param("relevance", relevance)
-                .param("now", OffsetDateTime.now(ZoneOffset.UTC))
+                .param("retentionUntil", now.plusDays(30))
+                .param("now", now)
                 .update();
-        audit(user.id(), "FEEDBACK_RECORDED", "SEARCH_RESULT", resultId,
+        audit(user.id(), session.albumId(), "FEEDBACK_RECORDED", "SEARCH_RESULT", resultId,
                 Map.of("sessionId", sessionId, "relevance", relevance));
         return Map.of("feedbackId", eventId, "status", "RECORDED");
     }
@@ -330,7 +424,43 @@ public class WorkflowService {
                 .param("id", request.id())
                 .update();
         String cleanupJobId = "cleanup-" + UUID.randomUUID();
-        audit(user.id(), "CONSENT_REVOKED", "CONSENT", consentId,
+        try {
+            jdbc.sql("""
+                    INSERT INTO deletion_jobs (
+                      id, consent_id, resource_type, resource_id, status,
+                      attempts, due_at, created_at
+                    ) VALUES (
+                      :id, :consentId, 'SEARCH_SESSION_SET', :requestId, 'PENDING',
+                      0, :now, :now
+                    )
+                    """)
+                    .param("id", cleanupJobId)
+                    .param("consentId", consentId)
+                    .param("requestId", request.id())
+                    .param("now", now)
+                    .update();
+            String payload = objectMapper.writeValueAsString(Map.of(
+                    "consentId", consentId,
+                    "requestId", request.id(),
+                    "cleanupJobId", cleanupJobId));
+            jdbc.sql("""
+                    INSERT INTO outbox_events (
+                      id, aggregate_type, aggregate_id, event_type, payload_json,
+                      status, attempts, available_at, created_at
+                    ) VALUES (
+                      :id, 'CONSENT', :consentId, 'CONSENT_REVOKED',
+                      :payload, 'PENDING', 0, :now, :now
+                    )
+                    """)
+                    .param("id", "event-" + UUID.randomUUID())
+                    .param("consentId", consentId)
+                    .param("payload", payload)
+                    .param("now", now)
+                    .update();
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("Could not serialize cleanup outbox event", exception);
+        }
+        audit(user.id(), request.albumId(), "CONSENT_REVOKED", "CONSENT", consentId,
                 Map.of("cleanupJobId", cleanupJobId, "requestId", request.id()));
         return Map.of(
                 "consentId", consentId,
@@ -338,14 +468,60 @@ public class WorkflowService {
                 "cleanupJobId", cleanupJobId);
     }
 
+    public DeletionJobDto getDeletionJob(AuthUser user, String jobId) {
+        CleanupJobRow job = jdbc.sql("""
+                SELECT d.*, c.subject_user_id, a.owner_user_id
+                FROM deletion_jobs d
+                JOIN consents c ON c.id = d.consent_id
+                JOIN albums a ON a.id = c.album_id
+                WHERE d.id = :id
+                """)
+                .param("id", jobId)
+                .query((rs, rowNum) -> new CleanupJobRow(
+                        rs.getString("id"),
+                        rs.getString("consent_id"),
+                        rs.getString("resource_type"),
+                        rs.getString("resource_id"),
+                        rs.getString("status"),
+                        rs.getInt("attempts"),
+                        rs.getString("last_error"),
+                        rs.getObject("due_at", OffsetDateTime.class).toString(),
+                        rs.getObject("completed_at", OffsetDateTime.class) == null
+                                ? null
+                                : rs.getObject("completed_at", OffsetDateTime.class).toString(),
+                        rs.getString("subject_user_id"),
+                        rs.getString("owner_user_id")))
+                .optional()
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND, "CLEANUP_JOB_NOT_FOUND", "Cleanup job not found"));
+        boolean allowed = user.id().equals(job.subjectUserId())
+                || user.id().equals(job.ownerUserId())
+                || "ADMIN".equals(user.role());
+        if (!allowed) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "CLEANUP_JOB_FORBIDDEN", "Cleanup job belongs to another user");
+        }
+        return new DeletionJobDto(
+                job.id(),
+                job.consentId(),
+                job.resourceType(),
+                job.resourceId(),
+                job.status(),
+                job.attempts(),
+                job.lastError(),
+                job.dueAt(),
+                job.completedAt());
+    }
+
     public List<AuditEventDto> auditEvents(AuthUser user, String albumId) {
         if (!user.isOwner() && !"ADMIN".equals(user.role())) {
             requireMember(user, albumId);
             return jdbc.sql("""
                     SELECT * FROM audit_events
-                    WHERE actor_user_id=:userId ORDER BY occurred_at DESC LIMIT 30
+                    WHERE actor_user_id=:userId AND album_id=:albumId
+                    ORDER BY occurred_at DESC LIMIT 30
                     """)
                     .param("userId", user.id())
+                    .param("albumId", albumId)
                     .query((rs, rowNum) -> new AuditEventDto(
                             rs.getString("id"),
                             rs.getString("action"),
@@ -356,8 +532,11 @@ public class WorkflowService {
         }
         requireAlbumOwner(user, albumId);
         return jdbc.sql("""
-                SELECT * FROM audit_events ORDER BY occurred_at DESC LIMIT 100
+                SELECT * FROM audit_events
+                WHERE album_id=:albumId
+                ORDER BY occurred_at DESC LIMIT 100
                 """)
+                .param("albumId", albumId)
                 .query((rs, rowNum) -> new AuditEventDto(
                         rs.getString("id"),
                         rs.getString("action"),
@@ -449,15 +628,25 @@ public class WorkflowService {
         return consent;
     }
 
-    private void audit(String actorId, String action, String type, String resourceId, Map<String, Object> metadata) {
+    private void audit(
+            String actorId,
+            String albumId,
+            String action,
+            String type,
+            String resourceId,
+            Map<String, Object> metadata) {
         try {
             jdbc.sql("""
                     INSERT INTO audit_events (
-                      id, actor_user_id, action, resource_type, resource_id,
+                      id, album_id, actor_user_id, action, resource_type, resource_id,
                       policy_version, metadata, occurred_at
-                    ) VALUES (:id, :actorId, :action, :type, :resourceId, :policyVersion, :metadata, :now)
+                    ) VALUES (
+                      :id, :albumId, :actorId, :action, :type, :resourceId,
+                      :policyVersion, :metadata, :now
+                    )
                     """)
                     .param("id", "audit-" + UUID.randomUUID())
+                    .param("albumId", albumId)
                     .param("actorId", actorId)
                     .param("action", action)
                     .param("type", type)
@@ -468,6 +657,14 @@ public class WorkflowService {
                     .update();
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Could not serialize audit metadata", exception);
+        }
+    }
+
+    private String sha256(byte[] input) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input));
+        } catch (Exception exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
         }
     }
 
@@ -497,7 +694,21 @@ public class WorkflowService {
             String resultsJson) {
     }
 
-    private record SessionActor(String userId) {
+    private record SessionActor(String userId, String albumId) {
+    }
+
+    private record CleanupJobRow(
+            String id,
+            String consentId,
+            String resourceType,
+            String resourceId,
+            String status,
+            int attempts,
+            String lastError,
+            String dueAt,
+            String completedAt,
+            String subjectUserId,
+            String ownerUserId) {
     }
 
     public record AlbumDto(String id, String name, int photoCount, String indexStatus, String role) {
@@ -521,6 +732,7 @@ public class WorkflowService {
     }
 
     public record SearchItemDto(
+            String resultId,
             String photoId,
             String title,
             String albumId,
@@ -545,6 +757,18 @@ public class WorkflowService {
     }
 
     public record AuditEventDto(String id, String action, String resourceType, String resourceId, String occurredAt) {
+    }
+
+    public record DeletionJobDto(
+            String id,
+            String consentId,
+            String resourceType,
+            String resourceId,
+            String status,
+            int attempts,
+            String lastError,
+            String dueAt,
+            String completedAt) {
     }
 
     public record ExperimentDto(

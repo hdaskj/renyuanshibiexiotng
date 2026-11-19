@@ -115,7 +115,7 @@ export function ParticipantWorkspace({ token, user }: Props) {
   async function sendFeedback(item: SearchResult, relevance: FeedbackValue) {
     if (!session) return;
     try {
-      await api.feedback(token, session.id, item.photoId, relevance);
+      await api.feedback(token, session.id, item.resultId, relevance);
       setResults(current =>
         current.map(result =>
           result.photoId === item.photoId ? { ...result, feedback: relevance } : result
@@ -137,6 +137,15 @@ export function ParticipantWorkspace({ token, user }: Props) {
       setResults([]);
       setSession(null);
       setStatus(`授权已撤回，清理状态：${response.status}，任务 ${response.cleanupJobId}`);
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 500));
+        const job = await api.deletionJob(token, response.cleanupJobId);
+        setStatus(
+          `授权已撤回，清理状态：${job.status}，任务 ${job.id}` +
+          (job.lastError ? `，错误：${job.lastError}` : "")
+        );
+        if (job.status === "COMPLETED" || job.status === "FAILED") break;
+      }
     } catch (error) {
       setStatus(message(error));
     } finally {
