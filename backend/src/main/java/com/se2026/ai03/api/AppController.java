@@ -21,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.se2026.ai03.auth.AuthUser;
 import com.se2026.ai03.config.WebConfig;
+import com.se2026.ai03.service.OperationsService;
 import com.se2026.ai03.service.WorkflowService;
 
 import jakarta.validation.Valid;
@@ -32,14 +33,21 @@ import jakarta.validation.constraints.NotBlank;
 @RequestMapping("/api/v1")
 public class AppController {
     private final WorkflowService workflow;
+    private final OperationsService operations;
 
-    public AppController(WorkflowService workflow) {
+    public AppController(WorkflowService workflow, OperationsService operations) {
         this.workflow = workflow;
+        this.operations = operations;
     }
 
     @GetMapping("/health")
     public Map<String, Object> health() {
         return Map.of("status", "UP", "service", "ai03-photo-backend", "version", "0.1.0");
+    }
+
+    @GetMapping("/health/dependencies")
+    public Map<String, Object> dependencyHealth() {
+        return operations.dependencyHealth();
     }
 
     @GetMapping("/albums")
@@ -98,17 +106,19 @@ public class AppController {
     }
 
     @PostMapping("/feedback")
-    public Map<String, Object> feedback(
+    public ResponseEntity<Map<String, Object>> feedback(
             @RequestAttribute(WebConfig.CURRENT_USER_ATTRIBUTE) AuthUser user,
             @Valid @RequestBody FeedbackRequest request) {
-        return workflow.feedback(user, request.sessionId(), request.resultId(), request.relevance());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(workflow.feedback(user, request.sessionId(), request.resultId(), request.relevance()));
     }
 
     @DeleteMapping("/consents/{consentId}")
-    public Map<String, Object> revoke(
+    public ResponseEntity<Map<String, Object>> revoke(
             @RequestAttribute(WebConfig.CURRENT_USER_ATTRIBUTE) AuthUser user,
             @PathVariable("consentId") String consentId) {
-        return workflow.revokeConsent(user, consentId);
+        return ResponseEntity.status(HttpStatus.ACCEPTED)
+                .body(workflow.revokeConsent(user, consentId));
     }
 
     @GetMapping("/deletion-jobs/{jobId}")
@@ -129,6 +139,12 @@ public class AppController {
     public List<WorkflowService.ExperimentDto> experiments(
             @RequestAttribute(WebConfig.CURRENT_USER_ATTRIBUTE) AuthUser user) {
         return workflow.experiments(user);
+    }
+
+    @GetMapping("/cleanup/summary")
+    public OperationsService.CleanupSummary cleanupSummary(
+            @RequestAttribute(WebConfig.CURRENT_USER_ATTRIBUTE) AuthUser user) {
+        return operations.cleanupSummary(user);
     }
 
     public record CreateRequest(

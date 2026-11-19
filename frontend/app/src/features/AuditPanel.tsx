@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import type { Album, AuditEvent, ExperimentSummary } from "../types";
+import type {
+  Album,
+  AuditEvent,
+  CleanupSummary,
+  DependencyHealth,
+  ExperimentSummary
+} from "../types";
 
 interface Props {
   token: string;
@@ -11,6 +17,8 @@ export function AuditPanel({ token }: Props) {
   const [albumId, setAlbumId] = useState("album-cabin");
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [experiments, setExperiments] = useState<ExperimentSummary[]>([]);
+  const [health, setHealth] = useState<DependencyHealth | null>(null);
+  const [cleanup, setCleanup] = useState<CleanupSummary | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -26,12 +34,16 @@ export function AuditPanel({ token }: Props) {
 
   async function load() {
     try {
-      const [audit, experiment] = await Promise.all([
+      const [audit, experiment, dependency, cleanupData] = await Promise.all([
         api.audit(token, albumId),
-        api.experiments(token)
+        api.experiments(token),
+        api.dependencyHealth(),
+        api.cleanupSummary(token)
       ]);
       setEvents(audit);
       setExperiments(experiment);
+      setHealth(dependency);
+      setCleanup(cleanupData);
       setError("");
     } catch (cause) {
       setError(message(cause));
@@ -60,6 +72,21 @@ export function AuditPanel({ token }: Props) {
         <button type="button" className="primary" onClick={load}>刷新数据</button>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
+
+      {health && (
+        <div className="audit-metrics">
+          <span>系统 {health.status}</span>
+          <span>数据库 {health.database.status}</span>
+          <span>模型 {health.modelService.status}</span>
+          <span>向量 {health.vectorProvider}</span>
+        </div>
+      )}
+      {cleanup && (
+        <div className="audit-metrics">
+          <span>清理任务 {JSON.stringify(cleanup.deletionJobs)}</span>
+          <span>Outbox {JSON.stringify(cleanup.outboxEvents)}</span>
+        </div>
+      )}
 
       <div className="audit-grid">
         <div className="panel">

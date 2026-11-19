@@ -65,6 +65,9 @@ def multipart_search(token, request_id, query):
 
 def main():
     print("health", json_request("/health")[1])
+    _, dependency_health = json_request("/health/dependencies")
+    assert dependency_health["database"]["status"] == "UP"
+    assert dependency_health["modelService"]["status"] == "UP"
     _, participant = json_request(
         "/auth/dev-login", "POST", {"username": "participant"}
     )
@@ -75,17 +78,12 @@ def main():
     _, albums = json_request("/albums", token=participant_token)
     assert any(album["id"] == "album-cabin" for album in albums)
 
-    _, requests = json_request(
-        "/search-requests?albumId=album-cabin", token=owner_token
+    _, pending = json_request(
+        "/search-requests",
+        "POST",
+        {"albumId": "album-cabin", "requestedDays": 7},
+        participant_token,
     )
-    pending = next((item for item in requests if item["status"] == "REQUESTED"), None)
-    if pending is None:
-        _, pending = json_request(
-            "/search-requests",
-            "POST",
-            {"albumId": "album-cabin", "requestedDays": 7},
-            participant_token,
-        )
     _, approved = json_request(
         f"/search-requests/{pending['id']}",
         "PATCH",
@@ -128,6 +126,13 @@ def main():
         f"/consents/{approved['consentId']}", "DELETE", token=participant_token
     )
     assert revoked["status"] == "CLEANUP_PENDING"
+    _, revoked_again = json_request(
+        f"/consents/{approved['consentId']}", "DELETE", token=participant_token
+    )
+    assert revoked_again["cleanupJobId"] == revoked["cleanupJobId"], (
+        f"repeat revoke must reuse cleanup job: first={revoked}, second={revoked_again}"
+    )
+    assert revoked_again["status"] == "CLEANUP_PENDING"
     _, cleanup = json_request(
         f"/deletion-jobs/{revoked['cleanupJobId']}", token=participant_token
     )
@@ -140,6 +145,9 @@ def main():
             f"/deletion-jobs/{revoked['cleanupJobId']}", token=participant_token
         )
     assert cleanup["status"] in ("PENDING", "COMPLETED")
+    _, cleanup_summary = json_request("/cleanup/summary", token=owner_token)
+    assert sum(cleanup_summary["deletionJobs"].values()) >= 1
+    assert sum(cleanup_summary["outboxEvents"].values()) >= 1
 
     try:
         json_request(
@@ -161,6 +169,7 @@ def main():
                 "auditActions": sorted(actions),
                 "revokeStatus": revoked["status"],
                 "cleanupStatus": cleanup["status"],
+                "cleanupSummary": cleanup_summary,
             },
             ensure_ascii=False,
             indent=2,

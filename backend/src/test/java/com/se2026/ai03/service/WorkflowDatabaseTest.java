@@ -60,6 +60,21 @@ class WorkflowDatabaseTest {
     }
 
     @Test
+    void repeatedRevokeReusesExistingCleanupJob() {
+        WorkflowService.SearchRequestDto request =
+                workflow.createRequest(PARTICIPANT, "album-cabin", 7);
+        WorkflowService.SearchRequestDto approved =
+                workflow.decide(OWNER, request.id(), "APPROVE", 7);
+
+        var first = workflow.revokeConsent(PARTICIPANT, approved.consentId());
+        var second = workflow.revokeConsent(PARTICIPANT, approved.consentId());
+
+        assertThat(second.get("cleanupJobId")).isEqualTo(first.get("cleanupJobId"));
+        assertThat(count("SELECT COUNT(*) FROM deletion_jobs WHERE consent_id=:id", approved.consentId()))
+                .isEqualTo(1);
+    }
+
+    @Test
     void cleanupWorkerCompletesPendingJobAndPublishesOutbox() {
         WorkflowService.SearchRequestDto request =
                 workflow.createRequest(PARTICIPANT, "album-cabin", 7);

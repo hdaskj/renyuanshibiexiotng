@@ -60,6 +60,18 @@ public class ModelClient {
         }
     }
 
+    public Map<?, ?> health() {
+        try {
+            Map<?, ?> response = client.get()
+                    .uri("/health")
+                    .retrieve()
+                    .body(Map.class);
+            return response == null ? Map.of("status", "UNKNOWN") : response;
+        } catch (RestClientException exception) {
+            return Map.of("status", "DOWN", "error", exception.getClass().getSimpleName());
+        }
+    }
+
     private String sha256(byte[] input) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256").digest(input);

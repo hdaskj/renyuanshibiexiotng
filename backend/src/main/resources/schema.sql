@@ -1,16 +1,7 @@
-DROP TABLE IF EXISTS outbox_events;
-DROP TABLE IF EXISTS deletion_jobs;
-DROP TABLE IF EXISTS feedback_events;
-DROP TABLE IF EXISTS search_results;
-DROP TABLE IF EXISTS search_sessions;
-DROP TABLE IF EXISTS consents;
-DROP TABLE IF EXISTS search_requests;
-DROP TABLE IF EXISTS audit_events;
-DROP TABLE IF EXISTS album_members;
-DROP TABLE IF EXISTS albums;
-DROP TABLE IF EXISTS users;
+-- This script is also used for the file-backed local H2 database.
+-- Keep it idempotent so restarting the application does not erase demo data.
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id VARCHAR(64) PRIMARY KEY,
   display_name VARCHAR(128) NOT NULL,
   role VARCHAR(32) NOT NULL,
@@ -18,7 +9,7 @@ CREATE TABLE users (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE albums (
+CREATE TABLE IF NOT EXISTS albums (
   id VARCHAR(64) PRIMARY KEY,
   owner_user_id VARCHAR(64) NOT NULL,
   name VARCHAR(128) NOT NULL,
@@ -28,7 +19,7 @@ CREATE TABLE albums (
   CONSTRAINT fk_album_owner FOREIGN KEY (owner_user_id) REFERENCES users(id)
 );
 
-CREATE TABLE album_members (
+CREATE TABLE IF NOT EXISTS album_members (
   album_id VARCHAR(64) NOT NULL,
   user_id VARCHAR(64) NOT NULL,
   role VARCHAR(32) NOT NULL,
@@ -40,7 +31,7 @@ CREATE TABLE album_members (
   CONSTRAINT ck_member_status CHECK (status IN ('INVITED', 'ACTIVE', 'REVOKED'))
 );
 
-CREATE TABLE search_requests (
+CREATE TABLE IF NOT EXISTS search_requests (
   id VARCHAR(64) PRIMARY KEY,
   album_id VARCHAR(64) NOT NULL,
   requester_user_id VARCHAR(64) NOT NULL,
@@ -59,7 +50,7 @@ CREATE TABLE search_requests (
   CONSTRAINT ck_request_status CHECK (status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'EXPIRED', 'REVOKED'))
 );
 
-CREATE TABLE consents (
+CREATE TABLE IF NOT EXISTS consents (
   id VARCHAR(64) PRIMARY KEY,
   request_id VARCHAR(64) NOT NULL UNIQUE,
   album_id VARCHAR(64) NOT NULL,
@@ -75,7 +66,7 @@ CREATE TABLE consents (
   CONSTRAINT ck_consent_status CHECK (status IN ('ACTIVE', 'EXPIRED', 'REVOKED'))
 );
 
-CREATE TABLE search_sessions (
+CREATE TABLE IF NOT EXISTS search_sessions (
   id VARCHAR(64) PRIMARY KEY,
   request_id VARCHAR(64) NOT NULL,
   actor_user_id VARCHAR(64) NOT NULL,
@@ -95,7 +86,7 @@ CREATE TABLE search_sessions (
   CONSTRAINT ck_session_status CHECK (status IN ('QUEUED', 'EXTRACTING', 'SEARCHING', 'COMPLETED', 'FAILED', 'EXPIRED', 'REVOKED'))
 );
 
-CREATE TABLE search_results (
+CREATE TABLE IF NOT EXISTS search_results (
   id VARCHAR(64) PRIMARY KEY,
   session_id VARCHAR(64) NOT NULL,
   photo_id VARCHAR(64) NOT NULL,
@@ -114,6 +105,7 @@ CREATE TABLE search_results (
   identity_disclaimer VARCHAR(128) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
   CONSTRAINT fk_result_session FOREIGN KEY (session_id) REFERENCES search_sessions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_result_album FOREIGN KEY (album_id) REFERENCES albums(id),
   CONSTRAINT uq_result_session_photo UNIQUE (session_id, photo_id),
   CONSTRAINT uq_result_session_rank UNIQUE (session_id, rank_number),
   CONSTRAINT ck_result_rank CHECK (rank_number > 0),
@@ -125,7 +117,7 @@ CREATE TABLE search_results (
   )
 );
 
-CREATE TABLE feedback_events (
+CREATE TABLE IF NOT EXISTS feedback_events (
   id VARCHAR(64) PRIMARY KEY,
   session_id VARCHAR(64) NOT NULL,
   result_id VARCHAR(64) NOT NULL,
@@ -140,7 +132,7 @@ CREATE TABLE feedback_events (
   CONSTRAINT ck_feedback_relevance CHECK (relevance IN ('RELEVANT', 'IRRELEVANT', 'UNDO'))
 );
 
-CREATE TABLE audit_events (
+CREATE TABLE IF NOT EXISTS audit_events (
   id VARCHAR(64) PRIMARY KEY,
   album_id VARCHAR(64),
   actor_user_id VARCHAR(64),
@@ -154,7 +146,7 @@ CREATE TABLE audit_events (
   CONSTRAINT fk_audit_actor FOREIGN KEY (actor_user_id) REFERENCES users(id)
 );
 
-CREATE TABLE deletion_jobs (
+CREATE TABLE IF NOT EXISTS deletion_jobs (
   id VARCHAR(64) PRIMARY KEY,
   consent_id VARCHAR(64) NOT NULL,
   resource_type VARCHAR(64) NOT NULL,
@@ -166,10 +158,12 @@ CREATE TABLE deletion_jobs (
   completed_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
   CONSTRAINT fk_deletion_consent FOREIGN KEY (consent_id) REFERENCES consents(id),
-  CONSTRAINT ck_deletion_status CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED'))
+  CONSTRAINT uq_deletion_consent_resource UNIQUE (consent_id, resource_type, resource_id),
+  CONSTRAINT ck_deletion_status CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')),
+  CONSTRAINT ck_deletion_attempts CHECK (attempts >= 0)
 );
 
-CREATE TABLE outbox_events (
+CREATE TABLE IF NOT EXISTS outbox_events (
   id VARCHAR(64) PRIMARY KEY,
   aggregate_type VARCHAR(64) NOT NULL,
   aggregate_id VARCHAR(64) NOT NULL,
@@ -179,17 +173,30 @@ CREATE TABLE outbox_events (
   attempts INTEGER NOT NULL DEFAULT 0,
   available_at TIMESTAMP WITH TIME ZONE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  CONSTRAINT ck_outbox_status CHECK (status IN ('PENDING', 'PUBLISHED', 'FAILED'))
+  CONSTRAINT ck_outbox_status CHECK (status IN ('PENDING', 'PUBLISHED', 'FAILED')),
+  CONSTRAINT ck_outbox_attempts CHECK (attempts >= 0)
 );
 
-CREATE INDEX idx_members_user ON album_members (user_id, status);
-CREATE INDEX idx_requests_album_created ON search_requests (album_id, created_at DESC);
-CREATE INDEX idx_requests_requester ON search_requests (requester_user_id, created_at DESC);
-CREATE INDEX idx_consents_expiry ON consents (status, expires_at);
-CREATE INDEX idx_sessions_request ON search_sessions (request_id);
-CREATE INDEX idx_results_session_rank ON search_results (session_id, rank_number);
-CREATE INDEX idx_feedback_retention ON feedback_events (retention_until);
-CREATE INDEX idx_audit_album_occurred ON audit_events (album_id, occurred_at DESC);
-CREATE INDEX idx_audit_actor_occurred ON audit_events (actor_user_id, occurred_at DESC);
-CREATE INDEX idx_deletion_status_due ON deletion_jobs (status, due_at);
-CREATE INDEX idx_outbox_status_available ON outbox_events (status, available_at);
+-- Upgrade columns that may be missing in a local database created by an
+-- earlier version of the demo. PostgreSQL uses Flyway V3/V4 for this purpose.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE album_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE search_sessions ADD COLUMN IF NOT EXISTS sample_sha256 VARCHAR(64);
+ALTER TABLE search_sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE feedback_events ADD COLUMN IF NOT EXISTS reason_code VARCHAR(64);
+ALTER TABLE feedback_events ADD COLUMN IF NOT EXISTS retention_until TIMESTAMP WITH TIME ZONE;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS album_id VARCHAR(64);
+
+CREATE INDEX IF NOT EXISTS idx_members_user ON album_members (user_id, status);
+CREATE INDEX IF NOT EXISTS idx_requests_album_created ON search_requests (album_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_requests_requester ON search_requests (requester_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_consents_expiry ON consents (status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_request ON search_sessions (request_id);
+CREATE INDEX IF NOT EXISTS idx_results_session_rank ON search_results (session_id, rank_number);
+CREATE INDEX IF NOT EXISTS idx_feedback_retention ON feedback_events (retention_until);
+CREATE INDEX IF NOT EXISTS idx_audit_album_occurred ON audit_events (album_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_actor_occurred ON audit_events (actor_user_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_deletion_status_due ON deletion_jobs (status, due_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_status_available ON outbox_events (status, available_at);

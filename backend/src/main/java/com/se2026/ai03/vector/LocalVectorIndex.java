@@ -14,6 +14,11 @@ import com.se2026.ai03.model.ModelClient.ModelFeatures;
 @Component
 @Profile("!milvus")
 public class LocalVectorIndex implements VectorIndex {
+    @Override
+    public String provider() {
+        return "local-demo-index";
+    }
+
     private record Candidate(
             String id,
             String title,

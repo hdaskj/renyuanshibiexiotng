@@ -26,19 +26,26 @@ public class CleanupWorker {
     private final ObjectMapper objectMapper;
     private final boolean enabled;
     private final boolean simulation;
+    private final int maxAttempts;
+    private final long retryBaseSeconds;
 
     public CleanupWorker(
             JdbcClient jdbc,
             ObjectMapper objectMapper,
             @Value("${app.cleanup.worker.enabled:false}") boolean enabled,
-            @Value("${app.cleanup.worker.simulation:true}") boolean simulation) {
+            @Value("${app.cleanup.worker.simulation:true}") boolean simulation,
+            @Value("${app.cleanup.worker.max-attempts:5}") int maxAttempts,
+            @Value("${app.cleanup.worker.retry-base-seconds:30}") long retryBaseSeconds) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
         this.simulation = simulation;
+        this.maxAttempts = Math.max(1, maxAttempts);
+        this.retryBaseSeconds = Math.max(1, retryBaseSeconds);
     }
 
     @Scheduled(fixedDelayString = "${app.cleanup.worker.poll-interval-ms:30000}")
+    @Transactional
     public void scheduledRun() {
         if (enabled) {
             runOnce(10);
@@ -107,16 +114,43 @@ public class CleanupWorker {
     }
 
     private void fail(String jobId, Exception exception) {
+        int attempts = jdbc.sql("SELECT attempts FROM deletion_jobs WHERE id=:id")
+                .param("id", jobId)
+                .query(Integer.class)
+                .optional()
+                .orElse(maxAttempts);
+        boolean exhausted = attempts >= maxAttempts;
+        OffsetDateTime nextDueAt = OffsetDateTime.now(ZoneOffset.UTC)
+                .plusSeconds(retryBaseSeconds * (1L << Math.min(attempts, 8)));
+        String error = exception.getMessage() == null
+                ? exception.getClass().getSimpleName()
+                : exception.getMessage();
         jdbc.sql("""
                 UPDATE deletion_jobs
-                SET status='FAILED', last_error=:error
+                SET status=:status, due_at=:dueAt, last_error=:error
                 WHERE id=:id
                 """)
-                .param("error", exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage())
+                .param("status", exhausted ? "FAILED" : "PENDING")
+                .param("dueAt", nextDueAt)
+                .param("error", error)
                 .param("id", jobId)
                 .update();
-        writeAudit("CLEANUP_FAILED", jobId, Map.of("error", String.valueOf(exception.getMessage())));
-        LOG.warn("Cleanup job {} failed", jobId, exception);
+        if (exhausted) {
+            jdbc.sql("""
+                    UPDATE outbox_events
+                    SET status='FAILED', attempts=attempts+1
+                    WHERE aggregate_id=(
+                      SELECT consent_id FROM deletion_jobs WHERE id=:id
+                    ) AND event_type='CONSENT_REVOKED' AND status='PENDING'
+                    """)
+                    .param("id", jobId)
+                    .update();
+        }
+        writeAudit("CLEANUP_FAILED", jobId, Map.of(
+                "error", error,
+                "attempt", attempts,
+                "retryScheduled", !exhausted));
+        LOG.warn("Cleanup job {} failed on attempt {} (retry={})", jobId, attempts, !exhausted, exception);
     }
 
     private void writeAudit(String action, String resourceId, Map<String, Object> metadata) {

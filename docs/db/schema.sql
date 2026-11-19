@@ -1,14 +1,6 @@
-DROP TABLE IF EXISTS outbox_events;
-DROP TABLE IF EXISTS deletion_jobs;
-DROP TABLE IF EXISTS feedback_events;
-DROP TABLE IF EXISTS search_results;
-DROP TABLE IF EXISTS search_sessions;
-DROP TABLE IF EXISTS consents;
-DROP TABLE IF EXISTS search_requests;
-DROP TABLE IF EXISTS audit_events;
-DROP TABLE IF EXISTS album_members;
-DROP TABLE IF EXISTS albums;
-DROP TABLE IF EXISTS users;
+-- Reference schema for a fresh PostgreSQL database.
+-- Runtime schema changes are applied with Flyway migrations in
+-- backend/src/main/resources/db/migration-postgres.
 
 CREATE TABLE users (
   id VARCHAR(64) PRIMARY KEY,
@@ -114,6 +106,7 @@ CREATE TABLE search_results (
   identity_disclaimer VARCHAR(128) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
   CONSTRAINT fk_result_session FOREIGN KEY (session_id) REFERENCES search_sessions(id) ON DELETE CASCADE,
+  CONSTRAINT fk_result_album FOREIGN KEY (album_id) REFERENCES albums(id),
   CONSTRAINT uq_result_session_photo UNIQUE (session_id, photo_id),
   CONSTRAINT uq_result_session_rank UNIQUE (session_id, rank_number),
   CONSTRAINT ck_result_rank CHECK (rank_number > 0),
@@ -166,7 +159,9 @@ CREATE TABLE deletion_jobs (
   completed_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
   CONSTRAINT fk_deletion_consent FOREIGN KEY (consent_id) REFERENCES consents(id),
-  CONSTRAINT ck_deletion_status CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED'))
+  CONSTRAINT uq_deletion_consent_resource UNIQUE (consent_id, resource_type, resource_id),
+  CONSTRAINT ck_deletion_status CHECK (status IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')),
+  CONSTRAINT ck_deletion_attempts CHECK (attempts >= 0)
 );
 
 CREATE TABLE outbox_events (
@@ -179,7 +174,8 @@ CREATE TABLE outbox_events (
   attempts INTEGER NOT NULL DEFAULT 0,
   available_at TIMESTAMP WITH TIME ZONE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  CONSTRAINT ck_outbox_status CHECK (status IN ('PENDING', 'PUBLISHED', 'FAILED'))
+  CONSTRAINT ck_outbox_status CHECK (status IN ('PENDING', 'PUBLISHED', 'FAILED')),
+  CONSTRAINT ck_outbox_attempts CHECK (attempts >= 0)
 );
 
 CREATE INDEX idx_members_user ON album_members (user_id, status);

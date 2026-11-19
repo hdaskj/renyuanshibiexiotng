@@ -92,3 +92,15 @@ export interface ExperimentSummary {
   ndcgAt10: number;
   p95LatencyMs: number;
 }
+
+export interface DependencyHealth {
+  status: string;
+  database: { status: string; check?: string; error?: string };
+  modelService: { status: string; engine?: string; modelVersion?: string };
+  vectorProvider: string;
+}
+
+export interface CleanupSummary {
+  deletionJobs: Record<string, number>;
+  outboxEvents: Record<string, number>;
+}

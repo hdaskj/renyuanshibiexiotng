@@ -40,6 +40,11 @@ public class MilvusVectorIndex extends LocalVectorIndex {
     }
 
     @Override
+    public String provider() {
+        return "milvus:" + collection;
+    }
+
+    @Override
     public List<ScoredPhoto> search(ModelFeatures features, String queryText, String sortMode, boolean diversity) {
         List<ScoredPhoto> local = super.search(features, queryText, sortMode, diversity);
         try {

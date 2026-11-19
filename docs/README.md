@@ -11,6 +11,8 @@
 - [OpenAPI 接口契约](api/openapi.yaml)：OpenAPI 3.1 接口定义。
 - [PostgreSQL 数据模型](db/schema.sql)：授权、相册、检索、反馈、审计和删除任务表。
 - [数据库与核心实现说明](数据库与核心实现说明.md)：规范化结果、清理任务、outbox 和验证结果。
+- [运行与测试说明](运行与测试说明.md)：H2/PostgreSQL 启动、健康检查、清理 Worker 和 E2E 验证。
+- [PostgreSQL 联调环境](../infra/README.md)：本地 PostgreSQL 容器和 Flyway 迁移入口。
 
 ## 原型
 
@@ -22,4 +24,4 @@
 
 ## 当前状态
 
-当前阶段只使用虚构演示数据，不包含真实人脸识别和持久化上传功能。正式模型与后端接入前，需先确认产品边界、Top-K 和 NDCG 口径以及授权留存策略。
+当前阶段使用虚构演示数据，默认以 H2 和确定性特征桩运行完整业务闭环。真实 InsightFace/CLIP/LLaVA、对象存储删除适配器、OIDC/JWT 和外部 PostgreSQL/Milvus 联调仍需在后续阶段完成。

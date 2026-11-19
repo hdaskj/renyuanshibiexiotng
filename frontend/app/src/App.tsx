@@ -12,6 +12,7 @@ export default function App() {
   const [session, setSession] = useState<LoginResponse | null>(null);
   const [tab, setTab] = useState<Tab>("participant");
   const [backend, setBackend] = useState("检查中");
+  const canManage = session?.user.role === "OWNER" || session?.user.role === "ADMIN";
 
   useEffect(() => {
     api.health()
@@ -44,7 +45,14 @@ export default function App() {
           <nav aria-label="功能导航">
             <button type="button" className={tab === "participant" ? "active" : ""} onClick={() => setTab("participant")}>参与者</button>
             <button type="button" className={tab === "owner" ? "active" : ""} onClick={() => setTab("owner")}>所有者</button>
-            <button type="button" className={tab === "audit" ? "active" : ""} onClick={() => setTab("audit")}>审计</button>
+            <button
+              type="button"
+              className={tab === "audit" ? "active" : ""}
+              onClick={() => setTab("audit")}
+              disabled={!canManage}
+            >
+              审计
+            </button>
           </nav>
         </header>
 
@@ -54,8 +62,10 @@ export default function App() {
           <ParticipantWorkspace token={session.token} user={session.user} />
         ) : tab === "owner" ? (
           <OwnerConsole token={session.token} user={session.user} />
-        ) : (
+        ) : canManage ? (
           <AuditPanel token={session.token} />
+        ) : (
+          <ParticipantWorkspace token={session.token} user={session.user} />
         )}
       </main>
     </div>

@@ -328,6 +328,11 @@ public class WorkflowService {
                     row.id(), row.requestId(), row.status(), 0,
                     row.modelVersion(), row.consentVersion(), normalizedItems);
         }
+        if (row.resultsJson() == null || row.resultsJson().isBlank()) {
+            return new SearchSessionDto(
+                    row.id(), row.requestId(), row.status(), 0,
+                    row.modelVersion(), row.consentVersion(), List.of());
+        }
         try {
             List<SearchItemDto> legacyItems = objectMapper.readValue(
                     row.resultsJson(), new TypeReference<List<SearchItemDto>>() {
@@ -346,7 +351,7 @@ public class WorkflowService {
             throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "INVALID_FEEDBACK", "Unsupported feedback value");
         }
         SessionActor session = jdbc.sql("""
-                SELECT s.actor_user_id, r.album_id
+                SELECT s.actor_user_id, s.request_id, r.album_id
                 FROM search_sessions s
                 JOIN search_requests r ON r.id = s.request_id
                 WHERE s.id=:id
@@ -354,12 +359,14 @@ public class WorkflowService {
                 .param("id", sessionId)
                 .query((rs, rowNum) -> new SessionActor(
                         rs.getString("actor_user_id"),
+                        rs.getString("request_id"),
                         rs.getString("album_id")))
                 .optional()
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "SESSION_NOT_FOUND", "Search session not found"));
         if (!session.userId().equals(user.id())) {
             throw new ApiException(HttpStatus.FORBIDDEN, "SESSION_FORBIDDEN", "Search session belongs to another user");
         }
+        activeConsent(session.requestId());
         int resultCount = jdbc.sql("""
                 SELECT COUNT(*) FROM search_results WHERE id=:resultId AND session_id=:sessionId
                 """)
@@ -397,7 +404,10 @@ public class WorkflowService {
     @Transactional
     public Map<String, Object> revokeConsent(AuthUser user, String consentId) {
         ConsentSummary consent = jdbc.sql("""
-                SELECT id, request_id, subject_user_id, status FROM consents WHERE id=:id
+                SELECT id, request_id, subject_user_id, status
+                FROM consents
+                WHERE id=:id
+                FOR UPDATE
                 """)
                 .param("id", consentId)
                 .query((rs, rowNum) -> new ConsentSummary(
@@ -412,11 +422,21 @@ public class WorkflowService {
         if (!allowed) {
             throw new ApiException(HttpStatus.FORBIDDEN, "CONSENT_FORBIDDEN", "Cannot revoke another user's consent");
         }
+        if (!"ACTIVE".equals(consent.status())) {
+            return existingRevocation(consentId);
+        }
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        jdbc.sql("UPDATE consents SET status='REVOKED', revoked_at=:now WHERE id=:id")
+        int revoked = jdbc.sql("""
+                UPDATE consents
+                SET status='REVOKED', revoked_at=:now
+                WHERE id=:id AND status='ACTIVE'
+                """)
                 .param("now", now)
                 .param("id", consentId)
                 .update();
+        if (revoked == 0) {
+            return existingRevocation(consentId);
+        }
         jdbc.sql("UPDATE search_requests SET status='REVOKED' WHERE id=:id")
                 .param("id", request.id())
                 .update();
@@ -466,6 +486,25 @@ public class WorkflowService {
                 "consentId", consentId,
                 "status", "CLEANUP_PENDING",
                 "cleanupJobId", cleanupJobId);
+    }
+
+    private Map<String, Object> existingRevocation(String consentId) {
+        String existingJobId = jdbc.sql("""
+                SELECT id FROM deletion_jobs
+                WHERE consent_id=:consentId
+                ORDER BY created_at LIMIT 1
+                """)
+                .param("consentId", consentId)
+                .query(String.class)
+                .optional()
+                .orElseThrow(() -> new ApiException(
+                        HttpStatus.CONFLICT,
+                        "CONSENT_NOT_ACTIVE",
+                        "Consent is no longer active"));
+        return Map.of(
+                "consentId", consentId,
+                "status", "CLEANUP_PENDING",
+                "cleanupJobId", existingJobId);
     }
 
     public DeletionJobDto getDeletionJob(AuthUser user, String jobId) {
@@ -694,7 +733,7 @@ public class WorkflowService {
             String resultsJson) {
     }
 
-    private record SessionActor(String userId, String albumId) {
+    private record SessionActor(String userId, String requestId, String albumId) {
     }
 
     private record CleanupJobRow(

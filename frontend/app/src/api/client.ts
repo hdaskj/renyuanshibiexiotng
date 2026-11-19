@@ -1,7 +1,9 @@
 import type {
   Album,
   AuditEvent,
+  CleanupSummary,
   DeletionJob,
+  DependencyHealth,
   ExperimentSummary,
   LoginResponse,
   SearchRequest,
@@ -147,5 +149,11 @@ export const api = {
     ),
 
   experiments: (token: string) =>
-    request<ExperimentSummary[]>("/experiments/summary", {}, token)
+    request<ExperimentSummary[]>("/experiments/summary", {}, token),
+
+  dependencyHealth: () =>
+    request<DependencyHealth>("/health/dependencies"),
+
+  cleanupSummary: (token: string) =>
+    request<CleanupSummary>("/cleanup/summary", {}, token)
 };

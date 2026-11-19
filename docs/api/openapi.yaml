@@ -29,14 +29,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [items, requestId]
-                properties:
-                  requestId: { type: string, format: uuid }
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Album"
+                type: array
+                items:
+                  $ref: "#/components/schemas/Album"
         "401":
           $ref: "#/components/responses/Unauthorized"
   /search-requests:
@@ -51,20 +46,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [albumId, purposeCode, requestedDays]
+              required: [albumId, requestedDays]
               properties:
                 albumId: { type: string, format: uuid }
-                purposeCode:
-                  type: string
-                  enum: [FIND_MY_PHOTOS]
                 requestedDays:
                   type: integer
                   minimum: 1
                   maximum: 14
                   default: 7
-                statement:
-                  type: string
-                  maxLength: 500
       responses:
         "201":
           description: 申请已创建
@@ -193,15 +182,13 @@ paths:
           application/json:
             schema:
               type: object
-              required: [resultId, relevance]
+              required: [sessionId, resultId, relevance]
               properties:
+                sessionId: { type: string, format: uuid }
                 resultId: { type: string, format: uuid }
                 relevance:
                   type: string
                   enum: [RELEVANT, IRRELEVANT, UNDO]
-                reasonCode:
-                  type: string
-                  enum: [WRONG_PERSON, WRONG_SCENE, WRONG_OUTFIT, PRIVACY_CONCERN, OTHER]
       responses:
         "201":
           description: 反馈已记录
@@ -226,14 +213,13 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [consentId, status, cleanupJobId, requestId]
+                required: [consentId, status, cleanupJobId]
                 properties:
                   consentId: { type: string, format: uuid }
                   status:
                     type: string
                     enum: [REVOKED, CLEANUP_PENDING]
                   cleanupJobId: { type: string, format: uuid }
-                  requestId: { type: string, format: uuid }
         "409":
           description: 授权已经撤回
   /deletion-jobs/{jobId}:
@@ -278,15 +264,53 @@ paths:
           content:
             application/json:
               schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditEvent"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /health/dependencies:
+    get:
+      tags: [Audit]
+      summary: 检查数据库、模型服务和向量提供方状态
+      responses:
+        "200":
+          description: 依赖状态；部分依赖不可用时返回 DEGRADED
+          content:
+            application/json:
+              schema:
                 type: object
-                required: [items, requestId]
+                required: [status, database, modelService, vectorProvider]
                 properties:
-                  requestId: { type: string, format: uuid }
-                  nextCursor: { type: [string, "null"] }
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/AuditEvent"
+                  status: { type: string, enum: [UP, DEGRADED] }
+                  database:
+                    type: object
+                    additionalProperties: true
+                  modelService:
+                    type: object
+                    additionalProperties: true
+                  vectorProvider: { type: string }
+  /cleanup/summary:
+    get:
+      tags: [Audit]
+      summary: 按状态汇总清理任务与 outbox 事件
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: 清理状态汇总
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deletionJobs, outboxEvents]
+                properties:
+                  deletionJobs:
+                    type: object
+                    additionalProperties: { type: integer, minimum: 0 }
+                  outboxEvents:
+                    type: object
+                    additionalProperties: { type: integer, minimum: 0 }
         "403":
           $ref: "#/components/responses/Forbidden"
   /experiments/summary:
@@ -301,14 +325,9 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [items, requestId]
-                properties:
-                  requestId: { type: string, format: uuid }
-                  items:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ExperimentSummary"
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExperimentSummary"
 components:
   securitySchemes:
     bearerAuth:
