@@ -28,6 +28,7 @@ public class CleanupWorker {
     private final boolean simulation;
     private final int maxAttempts;
     private final long retryBaseSeconds;
+    private final long claimTimeoutSeconds;
 
     public CleanupWorker(
             JdbcClient jdbc,
@@ -35,13 +36,15 @@ public class CleanupWorker {
             @Value("${app.cleanup.worker.enabled:false}") boolean enabled,
             @Value("${app.cleanup.worker.simulation:true}") boolean simulation,
             @Value("${app.cleanup.worker.max-attempts:5}") int maxAttempts,
-            @Value("${app.cleanup.worker.retry-base-seconds:30}") long retryBaseSeconds) {
+            @Value("${app.cleanup.worker.retry-base-seconds:30}") long retryBaseSeconds,
+            @Value("${app.cleanup.worker.claim-timeout-seconds:120}") long claimTimeoutSeconds) {
         this.jdbc = jdbc;
         this.objectMapper = objectMapper;
         this.enabled = enabled;
         this.simulation = simulation;
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryBaseSeconds = Math.max(1, retryBaseSeconds);
+        this.claimTimeoutSeconds = Math.max(1, claimTimeoutSeconds);
     }
 
     @Scheduled(fixedDelayString = "${app.cleanup.worker.poll-interval-ms:30000}")
@@ -54,12 +57,16 @@ public class CleanupWorker {
 
     @Transactional
     public int runOnce(int limit) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        OffsetDateTime staleBefore = now.minusSeconds(claimTimeoutSeconds);
         List<String> pending = jdbc.sql("""
                 SELECT id FROM deletion_jobs
-                WHERE status='PENDING' AND due_at <= :now
+                WHERE (status='PENDING' AND due_at <= :now)
+                   OR (status='RUNNING' AND (claimed_at IS NULL OR claimed_at <= :staleBefore))
                 ORDER BY due_at LIMIT :limit
                 """)
-                .param("now", OffsetDateTime.now(ZoneOffset.UTC))
+                .param("now", now)
+                .param("staleBefore", staleBefore)
                 .param("limit", limit)
                 .query(String.class)
                 .list();
@@ -68,10 +75,15 @@ public class CleanupWorker {
         for (String jobId : pending) {
             int claimed = jdbc.sql("""
                     UPDATE deletion_jobs
-                    SET status='RUNNING', attempts=attempts+1
-                    WHERE id=:id AND status='PENDING'
+                    SET status='RUNNING', attempts=attempts+1, claimed_at=:now
+                    WHERE id=:id
+                      AND ((status='PENDING' AND due_at <= :now)
+                        OR (status='RUNNING'
+                            AND (claimed_at IS NULL OR claimed_at <= :staleBefore)))
                     """)
                     .param("id", jobId)
+                    .param("now", now)
+                    .param("staleBefore", staleBefore)
                     .update();
             if (claimed == 0) {
                 continue;
@@ -91,10 +103,22 @@ public class CleanupWorker {
     }
 
     private void complete(String jobId) {
+        CleanupResource resource = jdbc.sql("""
+                SELECT resource_type, resource_id
+                FROM deletion_jobs
+                WHERE id=:id
+                """)
+                .param("id", jobId)
+                .query((rs, rowNum) -> new CleanupResource(
+                        rs.getString("resource_type"),
+                        rs.getString("resource_id")))
+                .optional()
+                .orElseThrow(() -> new IllegalStateException("Cleanup job no longer exists: " + jobId));
+        Map<String, Object> handled = deleteDatabaseDerivedData(resource);
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         jdbc.sql("""
                 UPDATE deletion_jobs
-                SET status='COMPLETED', completed_at=:now, last_error=NULL
+                SET status='COMPLETED', completed_at=:now, claimed_at=NULL, last_error=NULL
                 WHERE id=:id
                 """)
                 .param("now", now)
@@ -109,8 +133,11 @@ public class CleanupWorker {
                 """)
                 .param("id", jobId)
                 .update();
-        writeAudit("CLEANUP_COMPLETED", jobId, Map.of("simulation", true));
-        LOG.info("Cleanup job {} completed in simulation mode", jobId);
+        writeAudit("CLEANUP_COMPLETED", jobId, Map.of(
+                "simulation", simulation,
+                "resourceType", resource.resourceType(),
+                "handled", handled));
+        LOG.info("Cleanup job {} completed (simulation={})", jobId, simulation);
     }
 
     private void fail(String jobId, Exception exception) {
@@ -127,7 +154,7 @@ public class CleanupWorker {
                 : exception.getMessage();
         jdbc.sql("""
                 UPDATE deletion_jobs
-                SET status=:status, due_at=:dueAt, last_error=:error
+                SET status=:status, due_at=:dueAt, claimed_at=NULL, last_error=:error
                 WHERE id=:id
                 """)
                 .param("status", exhausted ? "FAILED" : "PENDING")
@@ -151,6 +178,35 @@ public class CleanupWorker {
                 "attempt", attempts,
                 "retryScheduled", !exhausted));
         LOG.warn("Cleanup job {} failed on attempt {} (retry={})", jobId, attempts, !exhausted, exception);
+    }
+
+    private Map<String, Object> deleteDatabaseDerivedData(CleanupResource resource) {
+        if (!"SEARCH_SESSION_SET".equals(resource.resourceType())) {
+            throw new IllegalStateException("Unsupported cleanup resource type: " + resource.resourceType());
+        }
+        int feedback = jdbc.sql("""
+                DELETE FROM feedback_events
+                WHERE session_id IN (
+                  SELECT id FROM search_sessions WHERE request_id=:resourceId
+                )
+                """)
+                .param("resourceId", resource.resourceId())
+                .update();
+        int results = jdbc.sql("""
+                DELETE FROM search_results
+                WHERE session_id IN (
+                  SELECT id FROM search_sessions WHERE request_id=:resourceId
+                )
+                """)
+                .param("resourceId", resource.resourceId())
+                .update();
+        int sessions = jdbc.sql("DELETE FROM search_sessions WHERE request_id=:resourceId")
+                .param("resourceId", resource.resourceId())
+                .update();
+        return Map.of(
+                "feedbackEventsDeleted", feedback,
+                "searchResultsDeleted", results,
+                "searchSessionsDeleted", sessions);
     }
 
     private void writeAudit(String action, String resourceId, Map<String, Object> metadata) {
@@ -177,5 +233,8 @@ public class CleanupWorker {
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Could not serialize cleanup audit", exception);
         }
+    }
+
+    private record CleanupResource(String resourceType, String resourceId) {
     }
 }

@@ -156,6 +156,7 @@ CREATE TABLE deletion_jobs (
   attempts INTEGER NOT NULL DEFAULT 0,
   last_error VARCHAR(1000),
   due_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  claimed_at TIMESTAMP WITH TIME ZONE,
   completed_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL,
   CONSTRAINT fk_deletion_consent FOREIGN KEY (consent_id) REFERENCES consents(id),
@@ -188,4 +189,5 @@ CREATE INDEX idx_feedback_retention ON feedback_events (retention_until);
 CREATE INDEX idx_audit_album_occurred ON audit_events (album_id, occurred_at DESC);
 CREATE INDEX idx_audit_actor_occurred ON audit_events (actor_user_id, occurred_at DESC);
 CREATE INDEX idx_deletion_status_due ON deletion_jobs (status, due_at);
+CREATE INDEX idx_deletion_claim ON deletion_jobs (status, claimed_at);
 CREATE INDEX idx_outbox_status_available ON outbox_events (status, available_at);

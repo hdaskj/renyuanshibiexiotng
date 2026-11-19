@@ -38,6 +38,7 @@ app:
       poll-interval-ms: ${CLEANUP_POLL_INTERVAL_MS:30000}
       max-attempts: ${CLEANUP_WORKER_MAX_ATTEMPTS:5}
       retry-base-seconds: ${CLEANUP_WORKER_RETRY_BASE_SECONDS:30}
+      claim-timeout-seconds: ${CLEANUP_WORKER_CLAIM_TIMEOUT_SECONDS:120}
   cors:
     allowed-origins: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173
 

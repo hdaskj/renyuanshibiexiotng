@@ -2,6 +2,9 @@ package com.se2026.ai03.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -91,6 +94,30 @@ class WorkflowDatabaseTest {
                 .isGreaterThanOrEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM audit_events WHERE action='CLEANUP_COMPLETED'"))
                 .isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void cleanupWorkerReclaimsStaleRunningJob() {
+        WorkflowService.SearchRequestDto request =
+                workflow.createRequest(PARTICIPANT, "album-cabin", 7);
+        WorkflowService.SearchRequestDto approved =
+                workflow.decide(OWNER, request.id(), "APPROVE", 7);
+        var revoked = workflow.revokeConsent(PARTICIPANT, approved.consentId());
+        String jobId = String.valueOf(revoked.get("cleanupJobId"));
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+
+        jdbc.sql("""
+                UPDATE deletion_jobs
+                SET status='RUNNING', attempts=1, claimed_at=:stale, due_at=:now
+                WHERE id=:id
+                """)
+                .param("stale", now.minusDays(1))
+                .param("now", now)
+                .param("id", jobId)
+                .update();
+
+        assertThat(cleanupWorker.runOnce(10)).isGreaterThanOrEqualTo(1);
+        assertThat(workflow.getDeletionJob(PARTICIPANT, jobId).status()).isEqualTo("COMPLETED");
     }
 
     private int count(String sql, Object... ignored) {

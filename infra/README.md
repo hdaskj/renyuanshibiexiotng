@@ -16,7 +16,7 @@ DB_PASSWORD=ai03 \
 mvn spring-boot:run
 ```
 
-后端启动时会按 `V1` 到 `V4` 执行迁移。确认数据库健康：
+后端启动时会按 `V1` 到 `V5` 执行迁移。确认数据库健康：
 
 ```bash
 curl http://127.0.0.1:8081/api/v1/health/dependencies
